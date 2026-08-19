@@ -1,0 +1,34 @@
+const { contextBridge, ipcRenderer } = require('electron');
+
+function invoke(channel) {
+  return (...args) => ipcRenderer.invoke(channel, ...args);
+}
+
+contextBridge.exposeInMainWorld('api', {
+  alumnos: {
+    listar: invoke('alumnos:listar'),
+    buscarPorDni: invoke('alumnos:buscarPorDni'),
+    obtener: invoke('alumnos:obtener'),
+    crear: invoke('alumnos:crear'),
+    actualizar: invoke('alumnos:actualizar'),
+  },
+  planes: {
+    listar: invoke('planes:listar'),
+    crear: invoke('planes:crear'),
+    actualizar: invoke('planes:actualizar'),
+  },
+  pagos: {
+    registrar: invoke('pagos:registrar'),
+  },
+  asistencias: {
+    estadoParaAsistencia: invoke('asistencias:estado'),
+    registrar: invoke('asistencias:registrar'),
+  },
+  recuperaciones: {
+    registrar: invoke('recuperaciones:registrar'),
+  },
+  historial: {
+    deAlumno: invoke('historial:deAlumno'),
+  },
+  vencimientos: invoke('vencimientos:listar'),
+});
