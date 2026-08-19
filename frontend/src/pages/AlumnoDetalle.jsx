@@ -33,7 +33,7 @@ export default function AlumnoDetalle({ alumnoId, onVolver }) {
   return (
     <div>
       <button className="link-btn" onClick={onVolver} style={{ marginBottom: 14 }}>
-        ← Volver a alumnos
+        ← Volver
       </button>
 
       <div className="card">
