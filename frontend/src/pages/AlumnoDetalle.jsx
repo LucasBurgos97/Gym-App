@@ -227,10 +227,15 @@ function FormularioPago({ alumnoId, onGuardado, onCancelar }) {
     window.api.planes.listar(true).then((res) => {
       if (res.ok) {
         setPlanes(res.data);
-        if (res.data.length) setForm((f) => ({ ...f, plan_id: res.data[0].id }));
+        if (res.data.length) setForm((f) => ({ ...f, plan_id: res.data[0].id, importe: res.data[0].precio }));
       }
     });
   }, []);
+
+  function seleccionarPlan(planId) {
+    const plan = planes.find((p) => String(p.id) === String(planId));
+    setForm((f) => ({ ...f, plan_id: planId, importe: plan ? plan.precio : f.importe }));
+  }
 
   async function guardar(e) {
     e.preventDefault();
@@ -260,7 +265,7 @@ function FormularioPago({ alumnoId, onGuardado, onCancelar }) {
       <div className="form-grid single">
         <div className="field">
           <label>Plan</label>
-          <select value={form.plan_id} onChange={(e) => setForm({ ...form, plan_id: e.target.value })}>
+          <select value={form.plan_id} onChange={(e) => seleccionarPlan(e.target.value)}>
             {planes.map((p) => (
               <option key={p.id} value={p.id}>
                 {p.nombre} {p.clases_incluidas === null ? '(ilimitado)' : `(${p.clases_incluidas} clases)`}
@@ -269,12 +274,8 @@ function FormularioPago({ alumnoId, onGuardado, onCancelar }) {
           </select>
         </div>
         <div className="field">
-          <label>Importe</label>
-          <input
-            type="number"
-            value={form.importe}
-            onChange={(e) => setForm({ ...form, importe: e.target.value })}
-          />
+          <label>Importe (fijado por el plan)</label>
+          <input type="number" value={form.importe} disabled />
         </div>
         <div className="field">
           <label>Fecha de inicio</label>

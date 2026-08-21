@@ -4,11 +4,16 @@ import Alumnos from './pages/Alumnos.jsx';
 import AlumnoDetalle from './pages/AlumnoDetalle.jsx';
 import Planes from './pages/Planes.jsx';
 import Vencimientos from './pages/Vencimientos.jsx';
+import Calendario from './pages/Calendario.jsx';
+import Reportes from './pages/Reportes.jsx';
+import Reloj from './components/Reloj.jsx';
 
 const NAV_ITEMS = [
   { key: 'asistencia', label: 'Asistencia', icon: '✓' },
   { key: 'alumnos', label: 'Alumnos', icon: '👤' },
+  { key: 'calendario', label: 'Calendario', icon: '📅' },
   { key: 'vencimientos', label: 'Vencimientos', icon: '⏰' },
+  { key: 'reportes', label: 'Ingresos', icon: '💰' },
   { key: 'planes', label: 'Planes', icon: '📋' },
 ];
 
@@ -35,21 +40,26 @@ export default function App() {
           Martin Gym Manager
           <small>Panel del entrenador</small>
         </div>
-        {NAV_ITEMS.map((item) => (
-          <button
-            key={item.key}
-            className={'nav-item' + (view === item.key || (item.key === origenDetalle && view === 'alumnoDetalle') ? ' active' : '')}
-            onClick={() => cambiarVista(item.key)}
-          >
-            <span>{item.icon}</span>
-            {item.label}
-          </button>
-        ))}
+        <div className="sidebar-nav">
+          {NAV_ITEMS.map((item) => (
+            <button
+              key={item.key}
+              className={'nav-item' + (view === item.key || (item.key === origenDetalle && view === 'alumnoDetalle') ? ' active' : '')}
+              onClick={() => cambiarVista(item.key)}
+            >
+              <span>{item.icon}</span>
+              {item.label}
+            </button>
+          ))}
+        </div>
+        <Reloj />
       </nav>
       <main className="main-area">
         {view === 'asistencia' && <Asistencia onVerAlumno={irADetalleAlumno} />}
         {view === 'alumnos' && <Alumnos onVerAlumno={irADetalleAlumno} />}
+        {view === 'calendario' && <Calendario onVerAlumno={irADetalleAlumno} />}
         {view === 'vencimientos' && <Vencimientos onVerAlumno={irADetalleAlumno} />}
+        {view === 'reportes' && <Reportes />}
         {view === 'alumnoDetalle' && (
           <AlumnoDetalle alumnoId={alumnoSeleccionado} onVolver={() => cambiarVista(origenDetalle)} />
         )}

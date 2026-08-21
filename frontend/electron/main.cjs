@@ -33,6 +33,11 @@ function registerHandlers() {
   ipcMain.handle('historial:deAlumno', wrap((id) => db.historialAlumno(id)));
 
   ipcMain.handle('vencimientos:listar', wrap(() => db.vencimientos()));
+
+  ipcMain.handle('calendario:asistenciasPorFecha', wrap((fecha) => db.asistenciasPorFecha(fecha)));
+  ipcMain.handle('calendario:diasConAsistencias', wrap((anio, mes) => db.diasConAsistenciasEnMes(anio, mes)));
+
+  ipcMain.handle('reportes:ingresos', wrap((tipo, referencia) => db.reporteIngresos(tipo, referencia)));
 }
 
 async function createWindow() {

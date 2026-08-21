@@ -56,6 +56,7 @@ export default function Alumnos({ onVerAlumno }) {
                 <th>Nombre</th>
                 <th>Teléfono</th>
                 <th>Email</th>
+                <th>Estado</th>
               </tr>
             </thead>
             <tbody>
@@ -65,6 +66,11 @@ export default function Alumnos({ onVerAlumno }) {
                   <td>{a.nombre} {a.apellido}</td>
                   <td>{a.telefono || '-'}</td>
                   <td>{a.email || '-'}</td>
+                  <td>
+                    <span className={`badge badge-${a.estado === 'activo' ? 'activa' : 'vencida'}`}>
+                      {a.estado}
+                    </span>
+                  </td>
                 </tr>
               ))}
             </tbody>

@@ -31,4 +31,11 @@ contextBridge.exposeInMainWorld('api', {
     deAlumno: invoke('historial:deAlumno'),
   },
   vencimientos: invoke('vencimientos:listar'),
+  calendario: {
+    asistenciasPorFecha: invoke('calendario:asistenciasPorFecha'),
+    diasConAsistencias: invoke('calendario:diasConAsistencias'),
+  },
+  reportes: {
+    ingresos: invoke('reportes:ingresos'),
+  },
 });

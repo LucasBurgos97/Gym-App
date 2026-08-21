@@ -109,12 +109,23 @@ function buscarAlumnoPorDni(dni) {
 }
 
 function listarAlumnos(filtro = '') {
-  if (!filtro) return all('SELECT * FROM alumnos ORDER BY apellido, nombre');
-  const like = `%${filtro}%`;
-  return all(
-    'SELECT * FROM alumnos WHERE dni LIKE ? OR nombre LIKE ? OR apellido LIKE ? ORDER BY apellido, nombre',
-    [like, like, like]
-  );
+  const base = `SELECT a.*,
+      (SELECT MAX(m.fecha_vencimiento) FROM membresias m WHERE m.alumno_id = a.id) AS ultimo_vencimiento
+    FROM alumnos a`;
+  const orden = 'ORDER BY a.apellido, a.nombre';
+
+  const rows = filtro
+    ? all(`${base} WHERE a.dni LIKE ? OR a.nombre LIKE ? OR a.apellido LIKE ? ${orden}`, [
+        `%${filtro}%`,
+        `%${filtro}%`,
+        `%${filtro}%`,
+      ])
+    : all(`${base} ${orden}`);
+
+  return rows.map((a) => ({
+    ...a,
+    estado: a.ultimo_vencimiento && a.ultimo_vencimiento >= today() ? 'activo' : 'inactivo',
+  }));
 }
 
 function obtenerAlumno(id) {
@@ -324,6 +335,114 @@ function historialAlumno(alumnoId) {
   };
 }
 
+// ---------- Calendario ----------
+
+function asistenciasPorFecha(fecha) {
+  // fecha en formato YYYY-MM-DD
+  return all(
+    `SELECT asi.id, asi.fecha, al.id AS alumno_id, al.dni, al.nombre, al.apellido, p.nombre AS plan_nombre
+     FROM asistencias asi
+     JOIN alumnos al ON al.id = asi.alumno_id
+     JOIN membresias m ON m.id = asi.membresia_id
+     JOIN planes p ON p.id = m.plan_id
+     WHERE date(asi.fecha) = ?
+     ORDER BY al.apellido, al.nombre`,
+    [fecha]
+  );
+}
+
+function diasConAsistenciasEnMes(anio, mes) {
+  // mes: 1-12. Devuelve las fechas (YYYY-MM-DD) del mes que tienen al menos una asistencia.
+  const desde = `${anio}-${String(mes).padStart(2, '0')}-01`;
+  const ultimoDia = new Date(anio, mes, 0).getDate();
+  const hasta = `${anio}-${String(mes).padStart(2, '0')}-${String(ultimoDia).padStart(2, '0')}`;
+  const rows = all(
+    `SELECT DISTINCT date(fecha) AS dia FROM asistencias WHERE date(fecha) BETWEEN ? AND ?`,
+    [desde, hasta]
+  );
+  return rows.map((r) => r.dia);
+}
+
+// ---------- Reportes de ingresos ----------
+
+function rangoPeriodo(tipo, referencia) {
+  const ref = referencia ? new Date(referencia) : new Date();
+  let inicio, fin;
+
+  if (tipo === 'semanal') {
+    const diaSemana = ref.getDay(); // 0=domingo
+    const diffLunes = diaSemana === 0 ? -6 : 1 - diaSemana;
+    inicio = new Date(ref);
+    inicio.setDate(ref.getDate() + diffLunes);
+    fin = new Date(inicio);
+    fin.setDate(inicio.getDate() + 6);
+  } else if (tipo === 'anual') {
+    inicio = new Date(ref.getFullYear(), 0, 1);
+    fin = new Date(ref.getFullYear(), 11, 31);
+  } else {
+    // mensual (por defecto)
+    inicio = new Date(ref.getFullYear(), ref.getMonth(), 1);
+    fin = new Date(ref.getFullYear(), ref.getMonth() + 1, 0);
+  }
+  const fmt = (d) => d.toISOString().slice(0, 10);
+  return { desde: fmt(inicio), hasta: fmt(fin) };
+}
+
+const DIAS_SEMANA = ['Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado', 'Domingo'];
+const MESES = [
+  'Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio',
+  'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre',
+];
+
+function reporteIngresos(tipo = 'mensual', referencia) {
+  const { desde, hasta } = rangoPeriodo(tipo, referencia);
+
+  const pagos = all(
+    `SELECT pa.*, a.nombre, a.apellido, pl.nombre AS plan_nombre
+     FROM pagos pa
+     JOIN alumnos a ON a.id = pa.alumno_id
+     JOIN planes pl ON pl.id = pa.plan_id
+     WHERE pa.fecha BETWEEN ? AND ?
+     ORDER BY pa.fecha DESC`,
+    [desde, hasta]
+  );
+
+  const total = pagos.reduce((acc, p) => acc + p.importe, 0);
+
+  let desglose = [];
+  if (tipo === 'semanal') {
+    const inicio = new Date(desde);
+    desglose = DIAS_SEMANA.map((label, i) => {
+      const dia = new Date(inicio);
+      dia.setDate(inicio.getDate() + i);
+      const diaStr = dia.toISOString().slice(0, 10);
+      const monto = pagos.filter((p) => p.fecha === diaStr).reduce((a, p) => a + p.importe, 0);
+      return { etiqueta: `${label} ${diaStr.slice(8, 10)}/${diaStr.slice(5, 7)}`, monto };
+    });
+  } else if (tipo === 'anual') {
+    desglose = MESES.map((label, i) => {
+      const mesNum = String(i + 1).padStart(2, '0');
+      const monto = pagos
+        .filter((p) => p.fecha.slice(5, 7) === mesNum)
+        .reduce((a, p) => a + p.importe, 0);
+      return { etiqueta: label, monto };
+    });
+  } else {
+    // mensual: por semana del mes
+    const grupos = {};
+    for (const p of pagos) {
+      const dia = Number(p.fecha.slice(8, 10));
+      const semana = Math.ceil(dia / 7);
+      grupos[semana] = (grupos[semana] || 0) + p.importe;
+    }
+    desglose = Object.keys(grupos)
+      .sort((a, b) => a - b)
+      .map((semana) => ({ etiqueta: `Semana ${semana}`, monto: grupos[semana] }));
+  }
+
+  return { tipo, desde, hasta, total, desglose, pagos };
+}
+
 function vencimientos() {
   // Membresías vencidas o próximas a vencer en los próximos 7 días.
   const en7dias = new Date();
@@ -364,4 +483,7 @@ module.exports = {
   membresiaVigente,
   clasesDisponibles,
   addCalendarMonth,
+  asistenciasPorFecha,
+  diasConAsistenciasEnMes,
+  reporteIngresos,
 };
