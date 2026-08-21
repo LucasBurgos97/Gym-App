@@ -68,11 +68,37 @@ async function init(userDataDir) {
   const schema = fs.readFileSync(path.join(__dirname, '..', '..', 'database', 'schema.sql'), 'utf-8');
   db.run(schema);
 
+  // Migración liviana: si la base ya existía de antes de agregar actividades,
+  // el CREATE TABLE IF NOT EXISTS de arriba no toca la tabla asistencias existente.
+  const columnasAsistencias = all('PRAGMA table_info(asistencias)').map((c) => c.name);
+  if (!columnasAsistencias.includes('actividad_id')) {
+    db.run('ALTER TABLE asistencias ADD COLUMN actividad_id INTEGER');
+  }
+  if (!columnasAsistencias.includes('horario')) {
+    db.run('ALTER TABLE asistencias ADD COLUMN horario TEXT');
+  }
+
   const planCount = get('SELECT COUNT(*) AS c FROM planes').c;
   if (planCount === 0) {
     run('INSERT INTO planes (nombre, clases_incluidas, precio, activo) VALUES (?, ?, ?, 1)', ['3 veces por semana', 12, 0]);
     run('INSERT INTO planes (nombre, clases_incluidas, precio, activo) VALUES (?, ?, ?, 1)', ['5 veces por semana', 20, 0]);
     run('INSERT INTO planes (nombre, clases_incluidas, precio, activo) VALUES (?, ?, ?, 1)', ['Plan libre', null, 0]);
+  }
+
+  const actividadCount = get('SELECT COUNT(*) AS c FROM actividades').c;
+  if (actividadCount === 0) {
+    run('INSERT INTO actividades (nombre, dias, horarios, activo) VALUES (?, ?, ?, 1)', [
+      'Full Training', 'lunes,miercoles,viernes', '10:00,18:00,19:00,20:00,21:00',
+    ]);
+    run('INSERT INTO actividades (nombre, dias, horarios, activo) VALUES (?, ?, ?, 1)', [
+      'Funcional para Adultos', 'martes,jueves', '18:00',
+    ]);
+    run('INSERT INTO actividades (nombre, dias, horarios, activo) VALUES (?, ?, ?, 1)', [
+      'Entrenamiento Personalizado', 'lunes,miercoles,viernes', '08:00,09:00,16:00,17:00',
+    ]);
+    run('INSERT INTO actividades (nombre, dias, horarios, activo) VALUES (?, ?, ?, 1)', [
+      'Full Training al Aire Libre', 'martes,jueves', '19:00,21:00',
+    ]);
   }
 
   persist();
@@ -159,6 +185,45 @@ function actualizarPlan(id, { nombre, clases_incluidas, precio, activo }) {
   return get('SELECT * FROM planes WHERE id = ?', [id]);
 }
 
+// ---------- Actividades (cronograma de clases) ----------
+
+function parseActividad(a) {
+  return {
+    ...a,
+    dias: a.dias ? a.dias.split(',').map((s) => s.trim()).filter(Boolean) : [],
+    horarios: a.horarios ? a.horarios.split(',').map((s) => s.trim()).filter(Boolean) : [],
+  };
+}
+
+function listaATexto(valor) {
+  return Array.isArray(valor) ? valor.join(',') : String(valor || '');
+}
+
+function listarActividades(soloActivas = false) {
+  return all(`SELECT * FROM actividades ${soloActivas ? 'WHERE activo = 1' : ''} ORDER BY id`).map(parseActividad);
+}
+
+function crearActividad({ nombre, dias, horarios }) {
+  if (!nombre) throw new Error('El nombre de la actividad es obligatorio.');
+  const id = run('INSERT INTO actividades (nombre, dias, horarios, activo) VALUES (?, ?, ?, 1)', [
+    nombre,
+    listaATexto(dias),
+    listaATexto(horarios),
+  ]);
+  return parseActividad(get('SELECT * FROM actividades WHERE id = ?', [id]));
+}
+
+function actualizarActividad(id, { nombre, dias, horarios, activo }) {
+  run('UPDATE actividades SET nombre = ?, dias = ?, horarios = ?, activo = ? WHERE id = ?', [
+    nombre,
+    listaATexto(dias),
+    listaATexto(horarios),
+    activo ? 1 : 0,
+    id,
+  ]);
+  return parseActividad(get('SELECT * FROM actividades WHERE id = ?', [id]));
+}
+
 // ---------- Membresías ----------
 
 function membresiaVigente(alumnoId) {
@@ -241,7 +306,7 @@ function registrarPago({ alumno_id, plan_id, importe, fecha }) {
 
 // ---------- Asistencias ----------
 
-function registrarAsistencia(dni) {
+function registrarAsistencia(dni, actividad_id, horario) {
   const alumno = buscarAlumnoPorDni(dni);
   if (!alumno) {
     const err = new Error('No existe un alumno registrado con ese DNI.');
@@ -259,7 +324,12 @@ function registrarAsistencia(dni) {
     throw new Error(`${alumno.nombre} ${alumno.apellido} no tiene clases disponibles en su membresía actual.`);
   }
 
-  run('INSERT INTO asistencias (alumno_id, membresia_id) VALUES (?, ?)', [alumno.id, membresia.id]);
+  run('INSERT INTO asistencias (alumno_id, membresia_id, actividad_id, horario) VALUES (?, ?, ?, ?)', [
+    alumno.id,
+    membresia.id,
+    actividad_id || null,
+    horario || null,
+  ]);
   run('UPDATE membresias SET clases_usadas = clases_usadas + 1 WHERE id = ?', [membresia.id]);
 
   const membresiaActualizada = get('SELECT * FROM membresias WHERE id = ?', [membresia.id]);
@@ -292,7 +362,13 @@ function estadoParaAsistencia(dni) {
 }
 
 function historialAsistencias(alumnoId) {
-  return all('SELECT * FROM asistencias WHERE alumno_id = ? ORDER BY fecha DESC', [alumnoId]);
+  return all(
+    `SELECT asi.*, act.nombre AS actividad_nombre
+     FROM asistencias asi
+     LEFT JOIN actividades act ON act.id = asi.actividad_id
+     WHERE asi.alumno_id = ? ORDER BY asi.fecha DESC`,
+    [alumnoId]
+  );
 }
 
 // ---------- Recuperaciones ----------
@@ -340,11 +416,13 @@ function historialAlumno(alumnoId) {
 function asistenciasPorFecha(fecha) {
   // fecha en formato YYYY-MM-DD
   return all(
-    `SELECT asi.id, asi.fecha, al.id AS alumno_id, al.dni, al.nombre, al.apellido, p.nombre AS plan_nombre
+    `SELECT asi.id, asi.fecha, asi.horario, al.id AS alumno_id, al.dni, al.nombre, al.apellido,
+            p.nombre AS plan_nombre, act.nombre AS actividad_nombre
      FROM asistencias asi
      JOIN alumnos al ON al.id = asi.alumno_id
      JOIN membresias m ON m.id = asi.membresia_id
      JOIN planes p ON p.id = m.plan_id
+     LEFT JOIN actividades act ON act.id = asi.actividad_id
      WHERE date(asi.fecha) = ?
      ORDER BY al.apellido, al.nombre`,
     [fecha]
@@ -474,6 +552,9 @@ module.exports = {
   listarPlanes,
   crearPlan,
   actualizarPlan,
+  listarActividades,
+  crearActividad,
+  actualizarActividad,
   registrarPago,
   registrarAsistencia,
   estadoParaAsistencia,

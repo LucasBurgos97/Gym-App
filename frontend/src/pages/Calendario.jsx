@@ -110,16 +110,16 @@ export default function Calendario({ onVerAlumno }) {
               <thead>
                 <tr>
                   <th>Alumno</th>
-                  <th>Plan</th>
-                  <th>Hora</th>
+                  <th>Actividad</th>
+                  <th>Horario</th>
                 </tr>
               </thead>
               <tbody>
                 {asistenciasDelDia.map((a) => (
                   <tr key={a.id} className="clickable-row" onClick={() => onVerAlumno(a.alumno_id)}>
                     <td>{a.apellido}, {a.nombre}</td>
-                    <td>{a.plan_nombre}</td>
-                    <td>{a.fecha.slice(11, 16)}</td>
+                    <td>{a.actividad_nombre || '-'}</td>
+                    <td>{a.horario || a.fecha.slice(11, 16)}</td>
                   </tr>
                 ))}
               </tbody>

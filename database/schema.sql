@@ -41,10 +41,23 @@ CREATE TABLE IF NOT EXISTS membresias (
   clases_recuperadas  INTEGER NOT NULL DEFAULT 0   -- clases extra otorgadas o trasladadas de una membresía anterior (RN-08/09/10)
 );
 
+-- Actividades del cronograma del gimnasio (Full Training, Funcional, etc.).
+-- Es independiente de "planes": el plan define cuántas clases tiene el alumno,
+-- la actividad describe qué clase concreta hizo en cada asistencia.
+CREATE TABLE IF NOT EXISTS actividades (
+  id        INTEGER PRIMARY KEY AUTOINCREMENT,
+  nombre    TEXT NOT NULL,
+  dias      TEXT NOT NULL,   -- días separados por coma, ej: "lunes,miercoles,viernes"
+  horarios  TEXT NOT NULL,   -- horas separadas por coma, ej: "10:00,18:00,19:00"
+  activo    INTEGER NOT NULL DEFAULT 1
+);
+
 CREATE TABLE IF NOT EXISTS asistencias (
   id            INTEGER PRIMARY KEY AUTOINCREMENT,
   alumno_id     INTEGER NOT NULL REFERENCES alumnos(id),
   membresia_id  INTEGER NOT NULL REFERENCES membresias(id),
+  actividad_id  INTEGER REFERENCES actividades(id),
+  horario       TEXT,        -- horario concreto elegido dentro de la actividad, ej: "19:00"
   fecha         TEXT NOT NULL DEFAULT (datetime('now'))
 );
 

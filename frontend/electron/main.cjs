@@ -23,10 +23,14 @@ function registerHandlers() {
   ipcMain.handle('planes:crear', wrap((datos) => db.crearPlan(datos)));
   ipcMain.handle('planes:actualizar', wrap((id, datos) => db.actualizarPlan(id, datos)));
 
+  ipcMain.handle('actividades:listar', wrap((soloActivas) => db.listarActividades(soloActivas)));
+  ipcMain.handle('actividades:crear', wrap((datos) => db.crearActividad(datos)));
+  ipcMain.handle('actividades:actualizar', wrap((id, datos) => db.actualizarActividad(id, datos)));
+
   ipcMain.handle('pagos:registrar', wrap((datos) => db.registrarPago(datos)));
 
   ipcMain.handle('asistencias:estado', wrap((dni) => db.estadoParaAsistencia(dni)));
-  ipcMain.handle('asistencias:registrar', wrap((dni) => db.registrarAsistencia(dni)));
+  ipcMain.handle('asistencias:registrar', wrap((dni, actividad_id, horario) => db.registrarAsistencia(dni, actividad_id, horario)));
 
   ipcMain.handle('recuperaciones:registrar', wrap((datos) => db.registrarRecuperacion(datos)));
 

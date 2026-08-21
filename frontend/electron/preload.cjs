@@ -17,6 +17,11 @@ contextBridge.exposeInMainWorld('api', {
     crear: invoke('planes:crear'),
     actualizar: invoke('planes:actualizar'),
   },
+  actividades: {
+    listar: invoke('actividades:listar'),
+    crear: invoke('actividades:crear'),
+    actualizar: invoke('actividades:actualizar'),
+  },
   pagos: {
     registrar: invoke('pagos:registrar'),
   },

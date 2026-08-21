@@ -137,11 +137,19 @@ export default function AlumnoDetalle({ alumnoId, onVolver }) {
         ) : (
           <table>
             <thead>
-              <tr><th>Fecha</th></tr>
+              <tr>
+                <th>Fecha</th>
+                <th>Actividad</th>
+                <th>Horario</th>
+              </tr>
             </thead>
             <tbody>
               {asistencias.slice(0, 15).map((a) => (
-                <tr key={a.id}><td>{a.fecha}</td></tr>
+                <tr key={a.id}>
+                  <td>{a.fecha}</td>
+                  <td>{a.actividad_nombre || '-'}</td>
+                  <td>{a.horario || '-'}</td>
+                </tr>
               ))}
             </tbody>
           </table>
