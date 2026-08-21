@@ -7,6 +7,7 @@ import Vencimientos from './pages/Vencimientos.jsx';
 import Calendario from './pages/Calendario.jsx';
 import Reportes from './pages/Reportes.jsx';
 import Reloj from './components/Reloj.jsx';
+import Logo from './components/Logo.jsx';
 
 const NAV_ITEMS = [
   { key: 'asistencia', label: 'Asistencia', icon: '✓' },
@@ -37,8 +38,11 @@ export default function App() {
     <div className="app-shell">
       <nav className="sidebar">
         <div className="sidebar-brand">
-          Martin Gym Manager
-          <small>Panel del entrenador</small>
+          <Logo />
+          <div className="sidebar-brand-text">
+            EL <span className="accent">PERRO</span> TEAM
+            <small>Club Fitness</small>
+          </div>
         </div>
         <div className="sidebar-nav">
           {NAV_ITEMS.map((item) => (
