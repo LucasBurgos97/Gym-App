@@ -18,6 +18,7 @@ function registerHandlers() {
   ipcMain.handle('alumnos:obtener', wrap((id) => db.obtenerAlumno(id)));
   ipcMain.handle('alumnos:crear', wrap((datos) => db.crearAlumno(datos)));
   ipcMain.handle('alumnos:actualizar', wrap((id, datos) => db.actualizarAlumno(id, datos)));
+  ipcMain.handle('alumnos:eliminar', wrap((id) => db.eliminarAlumno(id)));
 
   ipcMain.handle('planes:listar', wrap((soloActivos) => db.listarPlanes(soloActivos)));
   ipcMain.handle('planes:crear', wrap((datos) => db.crearPlan(datos)));

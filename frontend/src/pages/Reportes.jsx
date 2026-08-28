@@ -6,6 +6,8 @@ const PERIODOS = [
   { key: 'anual', label: 'Anual' },
 ];
 
+const PAGOS_POR_PAGINA = 5;
+
 function formatearMonto(n) {
   return n.toLocaleString('es-AR', { style: 'currency', currency: 'ARS', maximumFractionDigits: 0 });
 }
@@ -14,14 +16,22 @@ export default function Reportes() {
   const [periodo, setPeriodo] = useState('mensual');
   const [reporte, setReporte] = useState(null);
   const [cargando, setCargando] = useState(true);
+  const [pagina, setPagina] = useState(0);
 
   useEffect(() => {
     setCargando(true);
+    setPagina(0);
     window.api.reportes.ingresos(periodo).then((res) => {
       if (res.ok) setReporte(res.data);
       setCargando(false);
     });
   }, [periodo]);
+
+  const montoMax = reporte ? Math.max(1, ...reporte.desglose.map((d) => d.monto)) : 1;
+  const totalPaginas = reporte ? Math.ceil(reporte.pagos.length / PAGOS_POR_PAGINA) : 0;
+  const pagosPagina = reporte
+    ? reporte.pagos.slice(pagina * PAGOS_POR_PAGINA, pagina * PAGOS_POR_PAGINA + PAGOS_POR_PAGINA)
+    : [];
 
   return (
     <div>
@@ -66,22 +76,20 @@ export default function Reportes() {
 
           <div className="section-title">Desglose</div>
           <div className="card">
-            <table>
-              <thead>
-                <tr>
-                  <th>{periodo === 'anual' ? 'Mes' : periodo === 'semanal' ? 'Día' : 'Semana'}</th>
-                  <th>Ingresos</th>
-                </tr>
-              </thead>
-              <tbody>
-                {reporte.desglose.map((d) => (
-                  <tr key={d.etiqueta}>
-                    <td>{d.etiqueta}</td>
-                    <td>{formatearMonto(d.monto)}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+            <div className="desglose-grid">
+              {reporte.desglose.map((d) => (
+                <div key={d.etiqueta} className="desglose-tile">
+                  <div className="desglose-tile-label">{d.etiqueta}</div>
+                  <div className="desglose-tile-monto">{formatearMonto(d.monto)}</div>
+                  <div className="desglose-tile-barra">
+                    <div
+                      className="desglose-tile-barra-fill"
+                      style={{ width: `${Math.max(3, (d.monto / montoMax) * 100)}%` }}
+                    />
+                  </div>
+                </div>
+              ))}
+            </div>
           </div>
 
           <div className="section-title">Pagos del período</div>
@@ -89,26 +97,49 @@ export default function Reportes() {
             {reporte.pagos.length === 0 ? (
               <div className="empty-state">Sin pagos en este período.</div>
             ) : (
-              <table>
-                <thead>
-                  <tr>
-                    <th>Fecha</th>
-                    <th>Alumno</th>
-                    <th>Plan</th>
-                    <th>Importe</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {reporte.pagos.map((p) => (
-                    <tr key={p.id}>
-                      <td>{p.fecha}</td>
-                      <td>{p.apellido}, {p.nombre}</td>
-                      <td>{p.plan_nombre}</td>
-                      <td>{formatearMonto(p.importe)}</td>
+              <>
+                <table>
+                  <thead>
+                    <tr>
+                      <th>Fecha</th>
+                      <th>Alumno</th>
+                      <th>Plan</th>
+                      <th>Importe</th>
                     </tr>
-                  ))}
-                </tbody>
-              </table>
+                  </thead>
+                  <tbody>
+                    {pagosPagina.map((p) => (
+                      <tr key={p.id}>
+                        <td>{p.fecha}</td>
+                        <td>{p.apellido}, {p.nombre}</td>
+                        <td>{p.plan_nombre}</td>
+                        <td>{formatearMonto(p.importe)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+                {totalPaginas > 1 && (
+                  <div className="paginacion">
+                    <button
+                      className="btn btn-secondary"
+                      disabled={pagina === 0}
+                      onClick={() => setPagina((p) => p - 1)}
+                    >
+                      ‹ Anterior
+                    </button>
+                    <span className="muted">
+                      Página {pagina + 1} de {totalPaginas}
+                    </span>
+                    <button
+                      className="btn btn-secondary"
+                      disabled={pagina >= totalPaginas - 1}
+                      onClick={() => setPagina((p) => p + 1)}
+                    >
+                      Siguiente ›
+                    </button>
+                  </div>
+                )}
+              </>
             )}
           </div>
         </>

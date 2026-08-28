@@ -119,6 +119,33 @@ input, select {
   flex: 1;
   overflow-y: auto;
   padding: 28px 36px;
+  position: relative;
+}
+
+.watermark {
+  position: fixed;
+  left: 220px;
+  right: 0;
+  top: 0;
+  bottom: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  pointer-events: none;
+  z-index: 0;
+  overflow: hidden;
+}
+
+.watermark img {
+  width: 460px;
+  max-width: 55%;
+  opacity: 0.05;
+  filter: grayscale(1);
+}
+
+.main-content {
+  position: relative;
+  z-index: 1;
 }
 
 .page-header {
@@ -372,55 +399,127 @@ tr:hover td { background: #fafbfc; }
   overflow-y: auto;
 }
 
-.calendar-grid {
-  display: grid;
-  grid-template-columns: repeat(7, 1fr);
-  gap: 6px;
-  margin-top: 14px;
+.calendario-layout {
+  display: flex;
+  gap: 20px;
+  align-items: flex-start;
+  flex-wrap: wrap;
 }
 
-.calendar-weekday {
+.calendario-card {
+  flex: 1 1 420px;
+}
+
+.calendario-detalle {
+  flex: 1 1 320px;
+}
+
+.calendario-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 4px;
+}
+
+.calendario-toolbar h3 {
+  margin: 0;
+  flex: 1;
   text-align: center;
-  font-size: 12px;
-  font-weight: 600;
-  color: var(--text-muted);
-  text-transform: uppercase;
-  padding-bottom: 6px;
+  font-size: 18px;
+  text-transform: capitalize;
 }
 
-.calendar-cell {
-  position: relative;
-  aspect-ratio: 1;
+.calendario-hoy-btn {
+  padding: 6px 14px;
+  font-size: 13px;
+}
+
+.calendar-nav-btn {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
   border: 1px solid var(--border);
   background: #fff;
-  border-radius: 8px;
-  font-size: 14px;
+  font-size: 18px;
+  line-height: 1;
+  color: var(--text);
   display: flex;
   align-items: center;
   justify-content: center;
 }
 
-.calendar-cell:hover { background: #f1f3f5; }
+.calendar-nav-btn:hover {
+  background: var(--primary);
+  border-color: var(--primary);
+  color: #fff;
+}
+
+.calendar-grid {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 8px;
+  margin-top: 18px;
+}
+
+.calendar-weekday {
+  text-align: center;
+  font-size: 11.5px;
+  font-weight: 700;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  padding-bottom: 8px;
+}
+
+.calendar-cell {
+  position: relative;
+  aspect-ratio: 1;
+  border: none;
+  background: var(--bg);
+  border-radius: 10px;
+  font-size: 14px;
+  font-weight: 500;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text);
+  transition: background 0.12s ease, transform 0.12s ease;
+}
+
+.calendar-cell:hover {
+  background: var(--primary-light);
+  transform: scale(1.05);
+}
 
 .calendar-cell-empty {
-  border: none;
   background: transparent;
 }
 
+.calendar-cell-empty:hover {
+  background: transparent;
+  transform: none;
+}
+
 .calendar-cell-today {
-  border-color: var(--primary);
+  box-shadow: inset 0 0 0 2px var(--primary);
   font-weight: 700;
+  color: var(--primary-dark);
 }
 
 .calendar-cell-selected {
   background: var(--primary);
   color: #fff;
-  border-color: var(--primary);
+  font-weight: 700;
+}
+
+.calendar-cell-selected:hover {
+  background: var(--primary-dark);
+  transform: none;
 }
 
 .calendar-dot {
   position: absolute;
-  bottom: 5px;
+  bottom: 6px;
   width: 5px;
   height: 5px;
   border-radius: 50%;
@@ -429,6 +528,61 @@ tr:hover td { background: #fafbfc; }
 
 .calendar-cell-selected .calendar-dot {
   background: #fff;
+}
+
+.calendario-detalle-titulo {
+  text-transform: capitalize;
+}
+
+.desglose-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+  gap: 12px;
+}
+
+.desglose-tile {
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 12px 14px;
+  background: var(--bg);
+}
+
+.desglose-tile-label {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.desglose-tile-monto {
+  font-size: 16px;
+  font-weight: 700;
+  margin: 4px 0 10px;
+}
+
+.desglose-tile-barra {
+  height: 6px;
+  border-radius: 999px;
+  background: var(--border);
+  overflow: hidden;
+}
+
+.desglose-tile-barra-fill {
+  height: 100%;
+  background: var(--primary);
+  border-radius: 999px;
+}
+
+.paginacion {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+  margin-top: 16px;
 }
 
 .section-title {

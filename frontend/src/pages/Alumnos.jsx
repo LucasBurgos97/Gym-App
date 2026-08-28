@@ -52,24 +52,36 @@ export default function Alumnos({ onVerAlumno }) {
           <table>
             <thead>
               <tr>
-                <th>DNI</th>
                 <th>Nombre</th>
                 <th>Teléfono</th>
-                <th>Email</th>
                 <th>Estado</th>
+                <th>Membresía</th>
+                <th>Clases recuperadas</th>
+                <th></th>
               </tr>
             </thead>
             <tbody>
               {alumnos.map((a) => (
                 <tr key={a.id} className="clickable-row" onClick={() => onVerAlumno(a.id)}>
-                  <td>{a.dni}</td>
-                  <td>{a.nombre} {a.apellido}</td>
+                  <td>{a.apellido}, {a.nombre}</td>
                   <td>{a.telefono || '-'}</td>
-                  <td>{a.email || '-'}</td>
                   <td>
                     <span className={`badge badge-${a.estado === 'activo' ? 'activa' : 'vencida'}`}>
                       {a.estado}
                     </span>
+                  </td>
+                  <td>{a.membresia_plan || '-'}</td>
+                  <td>{a.clases_recuperadas ?? 0}</td>
+                  <td>
+                    <button
+                      className="btn btn-secondary"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onVerAlumno(a.id);
+                      }}
+                    >
+                      Ver detalles
+                    </button>
                   </td>
                 </tr>
               ))}

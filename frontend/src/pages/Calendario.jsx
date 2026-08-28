@@ -5,6 +5,7 @@ const MESES = [
   'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre',
 ];
 const DIAS_SEMANA = ['Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb', 'Dom'];
+const DIAS_SEMANA_LARGO = ['domingo', 'lunes', 'martes', 'miércoles', 'jueves', 'viernes', 'sábado'];
 
 function pad(n) {
   return String(n).padStart(2, '0');
@@ -12,6 +13,12 @@ function pad(n) {
 
 function toISODate(anio, mes, dia) {
   return `${anio}-${pad(mes)}-${pad(dia)}`;
+}
+
+function formatearFechaLarga(iso) {
+  const [y, m, d] = iso.split('-').map(Number);
+  const fecha = new Date(y, m - 1, d);
+  return `${DIAS_SEMANA_LARGO[fecha.getDay()]} ${d} de ${MESES[m - 1].toLowerCase()}`;
 }
 
 export default function Calendario({ onVerAlumno }) {
@@ -47,6 +54,12 @@ export default function Calendario({ onVerAlumno }) {
     setAnio(a);
   }
 
+  function irAHoy() {
+    setMes(hoy.getMonth() + 1);
+    setAnio(hoy.getFullYear());
+    setDiaSeleccionado(toISODate(hoy.getFullYear(), hoy.getMonth() + 1, hoy.getDate()));
+  }
+
   const primerDiaSemana = (new Date(anio, mes - 1, 1).getDay() + 6) % 7; // 0=lunes
   const diasEnMes = new Date(anio, mes, 0).getDate();
 
@@ -63,12 +76,13 @@ export default function Calendario({ onVerAlumno }) {
         <p>Seleccioná un día para ver qué alumnos asistieron.</p>
       </div>
 
-      <div style={{ display: 'flex', gap: 20, alignItems: 'flex-start', flexWrap: 'wrap' }}>
-        <div className="card" style={{ flex: '1 1 380px' }}>
-          <div className="toolbar">
-            <button className="btn btn-secondary" onClick={() => cambiarMes(-1)}>‹</button>
-            <h3 style={{ margin: 0 }}>{MESES[mes - 1]} {anio}</h3>
-            <button className="btn btn-secondary" onClick={() => cambiarMes(1)}>›</button>
+      <div className="calendario-layout">
+        <div className="card calendario-card">
+          <div className="calendario-toolbar">
+            <button className="calendar-nav-btn" onClick={() => cambiarMes(-1)} aria-label="Mes anterior">‹</button>
+            <h3>{MESES[mes - 1]} {anio}</h3>
+            <button className="calendar-nav-btn" onClick={() => cambiarMes(1)} aria-label="Mes siguiente">›</button>
+            <button className="btn btn-secondary calendario-hoy-btn" onClick={irAHoy}>Hoy</button>
           </div>
 
           <div className="calendar-grid">
@@ -87,11 +101,11 @@ export default function Calendario({ onVerAlumno }) {
                   className={
                     'calendar-cell' +
                     (seleccionado ? ' calendar-cell-selected' : '') +
-                    (esHoy ? ' calendar-cell-today' : '')
+                    (esHoy && !seleccionado ? ' calendar-cell-today' : '')
                   }
                   onClick={() => setDiaSeleccionado(iso)}
                 >
-                  {d}
+                  <span>{d}</span>
                   {tieneAsistencias && <span className="calendar-dot" />}
                 </button>
               );
@@ -99,8 +113,8 @@ export default function Calendario({ onVerAlumno }) {
           </div>
         </div>
 
-        <div className="card" style={{ flex: '1 1 320px' }}>
-          <h3>{diaSeleccionado}</h3>
+        <div className="card calendario-detalle">
+          <h3 className="calendario-detalle-titulo">{formatearFechaLarga(diaSeleccionado)}</h3>
           {cargandoDia ? (
             <p className="muted">Cargando...</p>
           ) : asistenciasDelDia.length === 0 ? (
@@ -111,7 +125,6 @@ export default function Calendario({ onVerAlumno }) {
                 <tr>
                   <th>Alumno</th>
                   <th>Actividad</th>
-                  <th>Horario</th>
                 </tr>
               </thead>
               <tbody>
@@ -119,7 +132,6 @@ export default function Calendario({ onVerAlumno }) {
                   <tr key={a.id} className="clickable-row" onClick={() => onVerAlumno(a.alumno_id)}>
                     <td>{a.apellido}, {a.nombre}</td>
                     <td>{a.actividad_nombre || '-'}</td>
-                    <td>{a.horario || a.fecha.slice(11, 16)}</td>
                   </tr>
                 ))}
               </tbody>

@@ -27,8 +27,17 @@ export default function AlumnoDetalle({ alumnoId, onVolver }) {
 
   if (cargando || !datos) return <p className="muted">Cargando...</p>;
 
-  const { alumno, membresias, pagos, asistencias, recuperaciones } = datos;
+  const { alumno, membresias, pagos, asistencias } = datos;
   const membresiaActual = membresias.find((m) => m.estado === 'activa');
+
+  async function eliminarAlumno() {
+    const confirmado = window.confirm(
+      `¿Eliminar a ${alumno.nombre} ${alumno.apellido}? Se borra junto con todo su historial de pagos, membresías y asistencias. Esta acción no se puede deshacer.`
+    );
+    if (!confirmado) return;
+    const res = await window.api.alumnos.eliminar(alumno.id);
+    if (res.ok) onVolver();
+  }
 
   return (
     <div>
@@ -49,9 +58,17 @@ export default function AlumnoDetalle({ alumnoId, onVolver }) {
               <span className="badge badge-vencida">Sin membresía vigente</span>
             )}
           </div>
-          <div style={{ display: 'flex', gap: 10 }}>
+          <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
             <button className="btn" onClick={() => setMostrarPago(true)}>Registrar pago</button>
+            <button
+              className="btn btn-secondary"
+              disabled={!membresiaActual}
+              onClick={() => setMostrarRecuperacion(true)}
+            >
+              + Recuperación
+            </button>
             <button className="btn btn-secondary" onClick={() => setMostrarEditar(true)}>Editar datos</button>
+            <button className="btn btn-danger" onClick={eliminarAlumno}>Eliminar alumno</button>
           </div>
         </div>
       </div>
@@ -85,44 +102,6 @@ export default function AlumnoDetalle({ alumnoId, onVolver }) {
                   <td>
                     <span className={`badge badge-${m.estado}`}>{m.estado}</span>
                   </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        )}
-      </div>
-
-      <div className="section-title">Clases recuperadas</div>
-      <div className="card">
-        <div className="toolbar">
-          <p className="muted" style={{ margin: 0 }}>Recuperaciones otorgadas por situaciones excepcionales.</p>
-          <button
-            className="btn btn-secondary"
-            disabled={!membresiaActual}
-            onClick={() => setMostrarRecuperacion(true)}
-          >
-            + Registrar recuperación
-          </button>
-        </div>
-        {recuperaciones.length === 0 ? (
-          <div className="empty-state">Sin recuperaciones registradas.</div>
-        ) : (
-          <table>
-            <thead>
-              <tr>
-                <th>Fecha</th>
-                <th>Clases</th>
-                <th>Motivo</th>
-                <th>Trasladada</th>
-              </tr>
-            </thead>
-            <tbody>
-              {recuperaciones.map((r) => (
-                <tr key={r.id}>
-                  <td>{r.fecha_registro?.slice(0, 10)}</td>
-                  <td>{r.cantidad_clases}</td>
-                  <td>{r.motivo}</td>
-                  <td>{r.trasladada_a_membresia_id ? 'Sí' : '-'}</td>
                 </tr>
               ))}
             </tbody>
@@ -249,7 +228,11 @@ function FormularioPago({ alumnoId, onGuardado, onCancelar }) {
     e.preventDefault();
     setError('');
     if (!form.plan_id) {
-      setError('Seleccioná un plan.');
+      setError('Seleccioná un plan. Si no aparece ninguno, activalo primero en la pantalla Planes.');
+      return;
+    }
+    if (!form.importe || Number(form.importe) <= 0) {
+      setError('El plan seleccionado no tiene un precio configurado. Poné un precio para ese plan en la pantalla Planes antes de registrar el pago.');
       return;
     }
     setGuardando(true);

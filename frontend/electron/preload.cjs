@@ -11,6 +11,7 @@ contextBridge.exposeInMainWorld('api', {
     obtener: invoke('alumnos:obtener'),
     crear: invoke('alumnos:crear'),
     actualizar: invoke('alumnos:actualizar'),
+    eliminar: invoke('alumnos:eliminar'),
   },
   planes: {
     listar: invoke('planes:listar'),

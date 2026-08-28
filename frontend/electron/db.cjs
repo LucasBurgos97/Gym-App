@@ -136,7 +136,11 @@ function buscarAlumnoPorDni(dni) {
 
 function listarAlumnos(filtro = '') {
   const base = `SELECT a.*,
-      (SELECT MAX(m.fecha_vencimiento) FROM membresias m WHERE m.alumno_id = a.id) AS ultimo_vencimiento
+      (SELECT MAX(m.fecha_vencimiento) FROM membresias m WHERE m.alumno_id = a.id) AS ultimo_vencimiento,
+      (SELECT p.nombre FROM membresias m2 JOIN planes p ON p.id = m2.plan_id
+        WHERE m2.alumno_id = a.id ORDER BY m2.fecha_inicio DESC LIMIT 1) AS membresia_plan,
+      (SELECT m3.clases_recuperadas FROM membresias m3
+        WHERE m3.alumno_id = a.id ORDER BY m3.fecha_inicio DESC LIMIT 1) AS clases_recuperadas
     FROM alumnos a`;
   const orden = 'ORDER BY a.apellido, a.nombre';
 
@@ -156,6 +160,18 @@ function listarAlumnos(filtro = '') {
 
 function obtenerAlumno(id) {
   return get('SELECT * FROM alumnos WHERE id = ?', [id]);
+}
+
+function eliminarAlumno(id) {
+  const alumno = obtenerAlumno(id);
+  if (!alumno) throw new Error('Alumno no encontrado.');
+
+  run('DELETE FROM recuperaciones WHERE alumno_id = ?', [id]);
+  run('DELETE FROM asistencias WHERE alumno_id = ?', [id]);
+  run('DELETE FROM membresias WHERE alumno_id = ?', [id]);
+  run('DELETE FROM pagos WHERE alumno_id = ?', [id]);
+  run('DELETE FROM alumnos WHERE id = ?', [id]);
+  return { eliminado: true };
 }
 
 // ---------- Planes ----------
@@ -264,6 +280,9 @@ function registrarPago({ alumno_id, plan_id, importe, fecha }) {
   if (!alumno) throw new Error('Alumno no encontrado.');
   const plan = get('SELECT * FROM planes WHERE id = ?', [plan_id]);
   if (!plan) throw new Error('Plan no encontrado.');
+  if (!importe || Number(importe) <= 0) {
+    throw new Error('El importe debe ser mayor a 0. Configurá un precio para el plan en la pantalla Planes.');
+  }
 
   const fechaInicio = fecha || today();
   const fechaVencimiento = addCalendarMonth(fechaInicio);
@@ -272,7 +291,7 @@ function registrarPago({ alumno_id, plan_id, importe, fecha }) {
     alumno_id,
     plan_id,
     fechaInicio,
-    Number(importe) || 0,
+    Number(importe),
   ]);
 
   // RN-10: si la membresía anterior venció con clases recuperadas sin usar, se trasladan a la nueva.
@@ -549,6 +568,7 @@ module.exports = {
   buscarAlumnoPorDni,
   listarAlumnos,
   obtenerAlumno,
+  eliminarAlumno,
   listarPlanes,
   crearPlan,
   actualizarPlan,

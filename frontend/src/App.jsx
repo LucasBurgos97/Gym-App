@@ -58,18 +58,23 @@ export default function App() {
         <Reloj />
       </nav>
       <main className="main-area">
-        <ErrorBoundary key={view}>
-          {view === 'asistencia' && <Asistencia onVerAlumno={irADetalleAlumno} />}
-          {view === 'alumnos' && <Alumnos onVerAlumno={irADetalleAlumno} />}
-          {view === 'calendario' && <Calendario onVerAlumno={irADetalleAlumno} />}
-          {view === 'vencimientos' && <Vencimientos onVerAlumno={irADetalleAlumno} />}
-          {view === 'reportes' && <Reportes />}
-          {view === 'alumnoDetalle' && (
-            <AlumnoDetalle alumnoId={alumnoSeleccionado} onVolver={() => cambiarVista(origenDetalle)} />
-          )}
-          {view === 'planes' && <Planes />}
-          {view === 'actividades' && <Actividades />}
-        </ErrorBoundary>
+        <div className="watermark" aria-hidden="true">
+          <img src={logoUrl} alt="" />
+        </div>
+        <div className="main-content">
+          <ErrorBoundary key={view}>
+            {view === 'asistencia' && <Asistencia onVerAlumno={irADetalleAlumno} />}
+            {view === 'alumnos' && <Alumnos onVerAlumno={irADetalleAlumno} />}
+            {view === 'calendario' && <Calendario onVerAlumno={irADetalleAlumno} />}
+            {view === 'vencimientos' && <Vencimientos onVerAlumno={irADetalleAlumno} />}
+            {view === 'reportes' && <Reportes />}
+            {view === 'alumnoDetalle' && (
+              <AlumnoDetalle alumnoId={alumnoSeleccionado} onVolver={() => cambiarVista(origenDetalle)} />
+            )}
+            {view === 'planes' && <Planes />}
+            {view === 'actividades' && <Actividades />}
+          </ErrorBoundary>
+        </div>
       </main>
     </div>
   );

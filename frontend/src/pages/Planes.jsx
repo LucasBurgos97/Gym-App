@@ -51,6 +51,11 @@ export default function Planes() {
 
       <div className="card">
         <h3>Planes existentes</h3>
+        {planes.length > 0 && planes.every((p) => !p.activo) && (
+          <div className="alert alert-warning">
+            No hay ningún plan activo — no vas a poder registrar pagos hasta activar al menos uno.
+          </div>
+        )}
         <table>
           <thead>
             <tr>
@@ -90,9 +95,10 @@ export default function Planes() {
                   />
                 </td>
                 <td>
-                  <button className="btn btn-secondary" onClick={() => toggleActivo(p)}>
+                  <label style={{ display: 'flex', alignItems: 'center', gap: 6, cursor: 'pointer' }}>
+                    <input type="checkbox" checked={!!p.activo} onChange={() => toggleActivo(p)} />
                     {p.activo ? 'Activo' : 'Inactivo'}
-                  </button>
+                  </label>
                 </td>
               </tr>
             ))}
