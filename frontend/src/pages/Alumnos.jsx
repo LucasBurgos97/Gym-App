@@ -49,44 +49,46 @@ export default function Alumnos({ onVerAlumno }) {
         ) : alumnos.length === 0 ? (
           <div className="empty-state">Todavía no hay alumnos registrados.</div>
         ) : (
-          <table>
-            <thead>
-              <tr>
-                <th>Nombre</th>
-                <th>Teléfono</th>
-                <th>Estado</th>
-                <th>Membresía</th>
-                <th>Clases recuperadas</th>
-                <th></th>
-              </tr>
-            </thead>
-            <tbody>
-              {alumnos.map((a) => (
-                <tr key={a.id} className="clickable-row" onClick={() => onVerAlumno(a.id)}>
-                  <td>{a.apellido}, {a.nombre}</td>
-                  <td>{a.telefono || '-'}</td>
-                  <td>
-                    <span className={`badge badge-${a.estado === 'activo' ? 'activa' : 'vencida'}`}>
-                      {a.estado}
-                    </span>
-                  </td>
-                  <td>{a.membresia_plan || '-'}</td>
-                  <td>{a.clases_recuperadas ?? 0}</td>
-                  <td>
-                    <button
-                      className="btn btn-secondary"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        onVerAlumno(a.id);
-                      }}
-                    >
-                      Ver detalles
-                    </button>
-                  </td>
+          <div className="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Nombre</th>
+                  <th>Tel.</th>
+                  <th>Estado</th>
+                  <th>Plan</th>
+                  <th>Recuperadas</th>
+                  <th></th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody>
+                {alumnos.map((a) => (
+                  <tr key={a.id} className="clickable-row" onClick={() => onVerAlumno(a.id)}>
+                    <td>{a.apellido}, {a.nombre}</td>
+                    <td>{a.telefono || '-'}</td>
+                    <td>
+                      <span className={`badge badge-${a.estado === 'activo' ? 'activa' : 'vencida'}`}>
+                        {a.estado}
+                      </span>
+                    </td>
+                    <td>{a.membresia_plan || '-'}</td>
+                    <td>{a.clases_recuperadas ?? 0}</td>
+                    <td>
+                      <button
+                        className="btn btn-secondary"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          onVerAlumno(a.id);
+                        }}
+                      >
+                        Ver
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         )}
       </div>
 

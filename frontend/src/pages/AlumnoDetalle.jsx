@@ -78,34 +78,36 @@ export default function AlumnoDetalle({ alumnoId, onVolver }) {
         {membresias.length === 0 ? (
           <div className="empty-state">Este alumno todavía no tiene membresías. Registrá un pago para crear la primera.</div>
         ) : (
-          <table>
-            <thead>
-              <tr>
-                <th>Plan</th>
-                <th>Inicio</th>
-                <th>Vencimiento</th>
-                <th>Clases</th>
-                <th>Estado</th>
-              </tr>
-            </thead>
-            <tbody>
-              {membresias.map((m) => (
-                <tr key={m.id}>
-                  <td>{m.plan_nombre}</td>
-                  <td>{m.fecha_inicio}</td>
-                  <td>{m.fecha_vencimiento}</td>
-                  <td>
-                    {m.clases_incluidas === null
-                      ? 'Ilimitadas'
-                      : `${m.clases_usadas} / ${m.clases_incluidas}${m.clases_recuperadas ? ` (+${m.clases_recuperadas} recuperadas)` : ''}`}
-                  </td>
-                  <td>
-                    <span className={`badge badge-${m.estado}`}>{m.estado}</span>
-                  </td>
+          <div className="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Plan</th>
+                  <th>Inicio</th>
+                  <th>Vencimiento</th>
+                  <th>Clases</th>
+                  <th>Estado</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody>
+                {membresias.map((m) => (
+                  <tr key={m.id}>
+                    <td>{m.plan_nombre}</td>
+                    <td>{m.fecha_inicio}</td>
+                    <td>{m.fecha_vencimiento}</td>
+                    <td>
+                      {m.clases_incluidas === null
+                        ? 'Ilimitadas'
+                        : `${m.clases_usadas} / ${m.clases_incluidas}${m.clases_recuperadas ? ` (+${m.clases_recuperadas} recuperadas)` : ''}`}
+                    </td>
+                    <td>
+                      <span className={`badge badge-${m.estado}`}>{m.estado}</span>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         )}
       </div>
 
@@ -114,24 +116,26 @@ export default function AlumnoDetalle({ alumnoId, onVolver }) {
         {asistencias.length === 0 ? (
           <div className="empty-state">Sin asistencias registradas.</div>
         ) : (
-          <table>
-            <thead>
-              <tr>
-                <th>Fecha</th>
-                <th>Actividad</th>
-                <th>Horario</th>
-              </tr>
-            </thead>
-            <tbody>
-              {asistencias.slice(0, 15).map((a) => (
-                <tr key={a.id}>
-                  <td>{a.fecha}</td>
-                  <td>{a.actividad_nombre || '-'}</td>
-                  <td>{a.horario || '-'}</td>
+          <div className="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Fecha</th>
+                  <th>Actividad</th>
+                  <th>Horario</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody>
+                {asistencias.slice(0, 15).map((a) => (
+                  <tr key={a.id}>
+                    <td>{a.fecha}</td>
+                    <td>{a.actividad_nombre || '-'}</td>
+                    <td>{a.horario || '-'}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         )}
       </div>
 
@@ -140,24 +144,26 @@ export default function AlumnoDetalle({ alumnoId, onVolver }) {
         {pagos.length === 0 ? (
           <div className="empty-state">Sin pagos registrados.</div>
         ) : (
-          <table>
-            <thead>
-              <tr>
-                <th>Fecha</th>
-                <th>Plan</th>
-                <th>Importe</th>
-              </tr>
-            </thead>
-            <tbody>
-              {pagos.map((p) => (
-                <tr key={p.id}>
-                  <td>{p.fecha}</td>
-                  <td>{p.plan_nombre}</td>
-                  <td>${p.importe}</td>
+          <div className="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Fecha</th>
+                  <th>Plan</th>
+                  <th>Importe</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody>
+                {pagos.map((p) => (
+                  <tr key={p.id}>
+                    <td>{p.fecha}</td>
+                    <td>{p.plan_nombre}</td>
+                    <td>${p.importe}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         )}
       </div>
 

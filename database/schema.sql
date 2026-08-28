@@ -45,11 +45,12 @@ CREATE TABLE IF NOT EXISTS membresias (
 -- Es independiente de "planes": el plan define cuántas clases tiene el alumno,
 -- la actividad describe qué clase concreta hizo en cada asistencia.
 CREATE TABLE IF NOT EXISTS actividades (
-  id        INTEGER PRIMARY KEY AUTOINCREMENT,
-  nombre    TEXT NOT NULL,
-  dias      TEXT NOT NULL,   -- días separados por coma, ej: "lunes,miercoles,viernes"
-  horarios  TEXT NOT NULL,   -- horas separadas por coma, ej: "10:00,18:00,19:00"
-  activo    INTEGER NOT NULL DEFAULT 1
+  id             INTEGER PRIMARY KEY AUTOINCREMENT,
+  nombre         TEXT NOT NULL,
+  dias           TEXT NOT NULL,   -- días separados por coma, ej: "lunes,miercoles,viernes"
+  horarios       TEXT NOT NULL,   -- horas separadas por coma, ej: "10:00,18:00,19:00"
+  activo         INTEGER NOT NULL DEFAULT 1,
+  personalizada  INTEGER NOT NULL DEFAULT 0  -- si es 1, no aplica la exclusividad de día+horario con otras actividades
 );
 
 CREATE TABLE IF NOT EXISTS asistencias (

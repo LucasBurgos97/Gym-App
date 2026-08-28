@@ -78,6 +78,12 @@ async function init(userDataDir) {
     db.run('ALTER TABLE asistencias ADD COLUMN horario TEXT');
   }
 
+  const columnasActividades = all('PRAGMA table_info(actividades)').map((c) => c.name);
+  if (!columnasActividades.includes('personalizada')) {
+    db.run('ALTER TABLE actividades ADD COLUMN personalizada INTEGER NOT NULL DEFAULT 0');
+    db.run("UPDATE actividades SET personalizada = 1 WHERE nombre = 'Entrenamiento Personalizado'");
+  }
+
   const planCount = get('SELECT COUNT(*) AS c FROM planes').c;
   if (planCount === 0) {
     run('INSERT INTO planes (nombre, clases_incluidas, precio, activo) VALUES (?, ?, ?, 1)', ['3 veces por semana', 12, 0]);
@@ -93,7 +99,7 @@ async function init(userDataDir) {
     run('INSERT INTO actividades (nombre, dias, horarios, activo) VALUES (?, ?, ?, 1)', [
       'Funcional para Adultos', 'martes,jueves', '18:00',
     ]);
-    run('INSERT INTO actividades (nombre, dias, horarios, activo) VALUES (?, ?, ?, 1)', [
+    run('INSERT INTO actividades (nombre, dias, horarios, activo, personalizada) VALUES (?, ?, ?, 1, 1)', [
       'Entrenamiento Personalizado', 'lunes,miercoles,viernes', '08:00,09:00,16:00,17:00',
     ]);
     run('INSERT INTO actividades (nombre, dias, horarios, activo) VALUES (?, ?, ?, 1)', [
@@ -201,6 +207,22 @@ function actualizarPlan(id, { nombre, clases_incluidas, precio, activo }) {
   return get('SELECT * FROM planes WHERE id = ?', [id]);
 }
 
+function eliminarPlan(id) {
+  const plan = get('SELECT * FROM planes WHERE id = ?', [id]);
+  if (!plan) throw new Error('Plan no encontrado.');
+
+  const enUso = get(
+    'SELECT (SELECT COUNT(*) FROM pagos WHERE plan_id = ?) + (SELECT COUNT(*) FROM membresias WHERE plan_id = ?) AS c',
+    [id, id]
+  ).c;
+  if (enUso > 0) {
+    throw new Error('Este plan ya tiene pagos o membresías registradas y no se puede eliminar. Podés desactivarlo en su lugar.');
+  }
+
+  run('DELETE FROM planes WHERE id = ?', [id]);
+  return { eliminado: true };
+}
+
 // ---------- Actividades (cronograma de clases) ----------
 
 function parseActividad(a) {
@@ -208,6 +230,7 @@ function parseActividad(a) {
     ...a,
     dias: a.dias ? a.dias.split(',').map((s) => s.trim()).filter(Boolean) : [],
     horarios: a.horarios ? a.horarios.split(',').map((s) => s.trim()).filter(Boolean) : [],
+    personalizada: !!a.personalizada,
   };
 }
 
@@ -215,29 +238,64 @@ function listaATexto(valor) {
   return Array.isArray(valor) ? valor.join(',') : String(valor || '');
 }
 
+// RN de agenda: dos actividades no pueden compartir el mismo día+horario,
+// salvo que alguna de ellas sea "personalizada" (entrenamientos 1 a 1, se pueden superponer).
+function validarConflictoHorario({ dias, horarios, personalizada, idAExcluir }) {
+  if (personalizada) return;
+  const otras = all('SELECT * FROM actividades WHERE personalizada = 0').map(parseActividad);
+  for (const otra of otras) {
+    if (idAExcluir && otra.id === idAExcluir) continue;
+    for (const d of dias) {
+      if (!otra.dias.includes(d)) continue;
+      for (const h of horarios) {
+        if (otra.horarios.includes(h)) {
+          throw new Error(`El horario ${h} del día ${d} ya lo usa la actividad "${otra.nombre}".`);
+        }
+      }
+    }
+  }
+}
+
 function listarActividades(soloActivas = false) {
   return all(`SELECT * FROM actividades ${soloActivas ? 'WHERE activo = 1' : ''} ORDER BY id`).map(parseActividad);
 }
 
-function crearActividad({ nombre, dias, horarios }) {
+function crearActividad({ nombre, dias, horarios, personalizada }) {
   if (!nombre) throw new Error('El nombre de la actividad es obligatorio.');
-  const id = run('INSERT INTO actividades (nombre, dias, horarios, activo) VALUES (?, ?, ?, 1)', [
+  const diasArr = Array.isArray(dias) ? dias : [];
+  const horariosArr = Array.isArray(horarios) ? horarios : [];
+  validarConflictoHorario({ dias: diasArr, horarios: horariosArr, personalizada: !!personalizada });
+  const id = run('INSERT INTO actividades (nombre, dias, horarios, activo, personalizada) VALUES (?, ?, ?, 1, ?)', [
     nombre,
     listaATexto(dias),
     listaATexto(horarios),
+    personalizada ? 1 : 0,
   ]);
   return parseActividad(get('SELECT * FROM actividades WHERE id = ?', [id]));
 }
 
-function actualizarActividad(id, { nombre, dias, horarios, activo }) {
-  run('UPDATE actividades SET nombre = ?, dias = ?, horarios = ?, activo = ? WHERE id = ?', [
+function actualizarActividad(id, { nombre, dias, horarios, activo, personalizada }) {
+  const diasArr = Array.isArray(dias) ? dias : [];
+  const horariosArr = Array.isArray(horarios) ? horarios : [];
+  validarConflictoHorario({ dias: diasArr, horarios: horariosArr, personalizada: !!personalizada, idAExcluir: id });
+  run('UPDATE actividades SET nombre = ?, dias = ?, horarios = ?, activo = ?, personalizada = ? WHERE id = ?', [
     nombre,
     listaATexto(dias),
     listaATexto(horarios),
     activo ? 1 : 0,
+    personalizada ? 1 : 0,
     id,
   ]);
   return parseActividad(get('SELECT * FROM actividades WHERE id = ?', [id]));
+}
+
+function eliminarActividad(id) {
+  const actividad = get('SELECT * FROM actividades WHERE id = ?', [id]);
+  if (!actividad) throw new Error('Actividad no encontrada.');
+  // Las asistencias ya registradas conservan su actividad_id como referencia histórica
+  // suelta (LEFT JOIN); no hace falta bloquear el borrado por eso.
+  run('DELETE FROM actividades WHERE id = ?', [id]);
+  return { eliminado: true };
 }
 
 // ---------- Membresías ----------
@@ -572,9 +630,11 @@ module.exports = {
   listarPlanes,
   crearPlan,
   actualizarPlan,
+  eliminarPlan,
   listarActividades,
   crearActividad,
   actualizarActividad,
+  eliminarActividad,
   registrarPago,
   registrarAsistencia,
   estadoParaAsistencia,

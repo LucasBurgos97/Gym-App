@@ -120,22 +120,24 @@ export default function Calendario({ onVerAlumno }) {
           ) : asistenciasDelDia.length === 0 ? (
             <div className="empty-state">Ningún alumno asistió este día.</div>
           ) : (
-            <table>
-              <thead>
-                <tr>
-                  <th>Alumno</th>
-                  <th>Actividad</th>
-                </tr>
-              </thead>
-              <tbody>
-                {asistenciasDelDia.map((a) => (
-                  <tr key={a.id} className="clickable-row" onClick={() => onVerAlumno(a.alumno_id)}>
-                    <td>{a.apellido}, {a.nombre}</td>
-                    <td>{a.actividad_nombre || '-'}</td>
+            <div className="table-wrap">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Alumno</th>
+                    <th>Actividad</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
+                </thead>
+                <tbody>
+                  {asistenciasDelDia.map((a) => (
+                    <tr key={a.id} className="clickable-row" onClick={() => onVerAlumno(a.alumno_id)}>
+                      <td>{a.apellido}, {a.nombre}</td>
+                      <td>{a.actividad_nombre || '-'}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
           )}
         </div>
       </div>

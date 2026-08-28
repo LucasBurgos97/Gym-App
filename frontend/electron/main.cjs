@@ -23,10 +23,12 @@ function registerHandlers() {
   ipcMain.handle('planes:listar', wrap((soloActivos) => db.listarPlanes(soloActivos)));
   ipcMain.handle('planes:crear', wrap((datos) => db.crearPlan(datos)));
   ipcMain.handle('planes:actualizar', wrap((id, datos) => db.actualizarPlan(id, datos)));
+  ipcMain.handle('planes:eliminar', wrap((id) => db.eliminarPlan(id)));
 
   ipcMain.handle('actividades:listar', wrap((soloActivas) => db.listarActividades(soloActivas)));
   ipcMain.handle('actividades:crear', wrap((datos) => db.crearActividad(datos)));
   ipcMain.handle('actividades:actualizar', wrap((id, datos) => db.actualizarActividad(id, datos)));
+  ipcMain.handle('actividades:eliminar', wrap((id) => db.eliminarActividad(id)));
 
   ipcMain.handle('pagos:registrar', wrap((datos) => db.registrarPago(datos)));
 
@@ -63,6 +65,9 @@ async function createWindow() {
   });
 
   if (isDev) {
+    win.webContents.on('console-message', (_event, level, message, line, sourceId) => {
+      console.log(`[renderer] ${message} (${sourceId}:${line})`);
+    });
     win.loadURL('http://localhost:5173');
   } else {
     win.loadFile(path.join(__dirname, '..', 'dist', 'index.html'));

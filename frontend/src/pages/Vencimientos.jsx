@@ -68,36 +68,38 @@ export default function Vencimientos({ onVerAlumno }) {
 
 function TablaVencimientos({ items, onVerAlumno }) {
   return (
-    <table>
-      <thead>
-        <tr>
-          <th>Alumno</th>
-          <th>DNI</th>
-          <th>Plan</th>
-          <th>Vencimiento</th>
-          <th>Estado</th>
-        </tr>
-      </thead>
-      <tbody>
-        {items.map((m) => {
-          const dias = diasRestantes(m.fecha_vencimiento);
-          return (
-            <tr key={m.id} className="clickable-row" onClick={() => onVerAlumno(m.alumno_id)}>
-              <td>{m.nombre} {m.apellido}</td>
-              <td>{m.dni}</td>
-              <td>{m.plan_nombre}</td>
-              <td>{m.fecha_vencimiento}</td>
-              <td>
-                {m.estado === 'vencida' ? (
-                  <span className="badge badge-vencida">Vencida hace {Math.abs(dias)} día{Math.abs(dias) === 1 ? '' : 's'}</span>
-                ) : (
-                  <span className="badge badge-activa">Vence en {dias} día{dias === 1 ? '' : 's'}</span>
-                )}
-              </td>
-            </tr>
-          );
-        })}
-      </tbody>
-    </table>
+    <div className="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>Alumno</th>
+            <th>DNI</th>
+            <th>Plan</th>
+            <th>Vencimiento</th>
+            <th>Estado</th>
+          </tr>
+        </thead>
+        <tbody>
+          {items.map((m) => {
+            const dias = diasRestantes(m.fecha_vencimiento);
+            return (
+              <tr key={m.id} className="clickable-row" onClick={() => onVerAlumno(m.alumno_id)}>
+                <td>{m.nombre} {m.apellido}</td>
+                <td>{m.dni}</td>
+                <td>{m.plan_nombre}</td>
+                <td>{m.fecha_vencimiento}</td>
+                <td>
+                  {m.estado === 'vencida' ? (
+                    <span className="badge badge-vencida">Vencida hace {Math.abs(dias)} día{Math.abs(dias) === 1 ? '' : 's'}</span>
+                  ) : (
+                    <span className="badge badge-activa">Vence en {dias} día{dias === 1 ? '' : 's'}</span>
+                  )}
+                </td>
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
+    </div>
   );
 }

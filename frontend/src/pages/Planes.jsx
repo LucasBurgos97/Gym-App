@@ -1,6 +1,81 @@
 import React, { useEffect, useState } from 'react';
 import Alert from '../components/Alert.jsx';
 
+function FilaPlan({ plan, onGuardado, onEliminado }) {
+  const [nombre, setNombre] = useState(plan.nombre);
+  const [clasesIncluidas, setClasesIncluidas] = useState(plan.clases_incluidas ?? '');
+  const [precio, setPrecio] = useState(plan.precio);
+  const [activo, setActivo] = useState(!!plan.activo);
+  const [error, setError] = useState('');
+  const [guardando, setGuardando] = useState(false);
+
+  async function guardar() {
+    setError('');
+    setGuardando(true);
+    const res = await window.api.planes.actualizar(plan.id, {
+      nombre,
+      clases_incluidas: clasesIncluidas === '' ? null : Number(clasesIncluidas),
+      precio: Number(precio) || 0,
+      activo,
+    });
+    setGuardando(false);
+    if (!res.ok) {
+      setError(res.error);
+      return;
+    }
+    onGuardado();
+  }
+
+  async function eliminar() {
+    if (!window.confirm(`¿Eliminar el plan "${plan.nombre}"?`)) return;
+    const res = await window.api.planes.eliminar(plan.id);
+    if (!res.ok) {
+      setError(res.error);
+      return;
+    }
+    onEliminado();
+  }
+
+  return (
+    <tr>
+      <td>
+        <input className="table-input" value={nombre} onChange={(e) => setNombre(e.target.value)} style={{ width: 170 }} />
+      </td>
+      <td>
+        <input
+          className="table-input"
+          value={clasesIncluidas}
+          placeholder="Ilimitado"
+          onChange={(e) => setClasesIncluidas(e.target.value.replace(/[^0-9]/g, ''))}
+          style={{ width: 80 }}
+        />
+      </td>
+      <td>
+        <input
+          className="table-input"
+          type="number"
+          value={precio}
+          onChange={(e) => setPrecio(e.target.value)}
+          style={{ width: 90 }}
+        />
+      </td>
+      <td>
+        <label style={{ display: 'flex', alignItems: 'center', gap: 6, cursor: 'pointer' }}>
+          <input type="checkbox" checked={activo} onChange={(e) => setActivo(e.target.checked)} />
+          {activo ? 'Activo' : 'Inactivo'}
+        </label>
+      </td>
+      <td>
+        <div style={{ display: 'flex', gap: 8 }}>
+          <button className="btn btn-secondary" onClick={guardar} disabled={guardando}>Guardar</button>
+          <button className="btn btn-danger" onClick={eliminar}>Eliminar</button>
+        </div>
+        {error && <Alert>{error}</Alert>}
+      </td>
+    </tr>
+  );
+}
+
 export default function Planes() {
   const [planes, setPlanes] = useState([]);
   const [error, setError] = useState('');
@@ -31,17 +106,6 @@ export default function Planes() {
     cargar();
   }
 
-  async function toggleActivo(plan) {
-    await window.api.planes.actualizar(plan.id, { ...plan, activo: plan.activo ? 0 : 1 });
-    cargar();
-  }
-
-  async function actualizarCampo(plan, campo, valor) {
-    const actualizado = { ...plan, [campo]: valor };
-    await window.api.planes.actualizar(plan.id, actualizado);
-    cargar();
-  }
-
   return (
     <div>
       <div className="page-header">
@@ -56,56 +120,26 @@ export default function Planes() {
             No hay ningún plan activo — no vas a poder registrar pagos hasta activar al menos uno.
           </div>
         )}
-        <table>
-          <thead>
-            <tr>
-              <th>Nombre</th>
-              <th>Clases incluidas</th>
-              <th>Precio</th>
-              <th>Activo</th>
-            </tr>
-          </thead>
-          <tbody>
-            {planes.map((p) => (
-              <tr key={p.id}>
-                <td>
-                  <input
-                    defaultValue={p.nombre}
-                    onBlur={(e) => e.target.value !== p.nombre && actualizarCampo(p, 'nombre', e.target.value)}
-                    style={{ border: 'none', background: 'transparent', width: '100%' }}
-                  />
-                </td>
-                <td>
-                  <input
-                    defaultValue={p.clases_incluidas ?? ''}
-                    placeholder="Ilimitado"
-                    onBlur={(e) =>
-                      Number(e.target.value || '') !== (p.clases_incluidas ?? '') &&
-                      actualizarCampo(p, 'clases_incluidas', e.target.value === '' ? null : Number(e.target.value))
-                    }
-                    style={{ border: 'none', background: 'transparent', width: 90 }}
-                  />
-                </td>
-                <td>
-                  <input
-                    type="number"
-                    defaultValue={p.precio}
-                    onBlur={(e) => Number(e.target.value) !== p.precio && actualizarCampo(p, 'precio', Number(e.target.value))}
-                    style={{ border: 'none', background: 'transparent', width: 100 }}
-                  />
-                </td>
-                <td>
-                  <label style={{ display: 'flex', alignItems: 'center', gap: 6, cursor: 'pointer' }}>
-                    <input type="checkbox" checked={!!p.activo} onChange={() => toggleActivo(p)} />
-                    {p.activo ? 'Activo' : 'Inactivo'}
-                  </label>
-                </td>
+        <div className="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Nombre</th>
+                <th>Clases</th>
+                <th>Precio</th>
+                <th>Activo</th>
+                <th></th>
               </tr>
-            ))}
-          </tbody>
-        </table>
+            </thead>
+            <tbody>
+              {planes.map((p) => (
+                <FilaPlan key={p.id} plan={p} onGuardado={cargar} onEliminado={cargar} />
+              ))}
+            </tbody>
+          </table>
+        </div>
         <p className="muted" style={{ marginTop: 10 }}>
-          Dejá "Clases incluidas" vacío para un plan libre / ilimitado. Los cambios se guardan al salir del campo.
+          Dejá "Clases incluidas" vacío para un plan libre / ilimitado. Tocá "Guardar" en la fila para aplicar los cambios.
         </p>
       </div>
 
@@ -121,7 +155,7 @@ export default function Planes() {
             <label>Clases incluidas (vacío = ilimitado)</label>
             <input
               value={nuevo.clases_incluidas}
-              onChange={(e) => setNuevo({ ...nuevo, clases_incluidas: e.target.value })}
+              onChange={(e) => setNuevo({ ...nuevo, clases_incluidas: e.target.value.replace(/[^0-9]/g, '') })}
             />
           </div>
           <div className="field">
