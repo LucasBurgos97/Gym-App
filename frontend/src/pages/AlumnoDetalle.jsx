@@ -13,6 +13,7 @@ export default function AlumnoDetalle({ alumnoId, onVolver }) {
   const [mostrarEditar, setMostrarEditar] = useState(false);
   const [mostrarPago, setMostrarPago] = useState(false);
   const [mostrarRecuperacion, setMostrarRecuperacion] = useState(false);
+  const [mostrarHistorialRecuperaciones, setMostrarHistorialRecuperaciones] = useState(false);
 
   async function cargar() {
     setCargando(true);
@@ -27,8 +28,14 @@ export default function AlumnoDetalle({ alumnoId, onVolver }) {
 
   if (cargando || !datos) return <p className="muted">Cargando...</p>;
 
-  const { alumno, membresias, pagos, asistencias } = datos;
+  const { alumno, membresias, pagos, asistencias, recuperaciones } = datos;
   const membresiaActual = membresias.find((m) => m.estado === 'activa');
+
+  async function eliminarAsistencia(id) {
+    if (!window.confirm('¿Deshacer esta asistencia? Le devuelve la clase a la membresía.')) return;
+    const res = await window.api.asistencias.eliminar(id);
+    if (res.ok) cargar();
+  }
 
   async function eliminarAlumno() {
     const confirmado = window.confirm(
@@ -67,6 +74,11 @@ export default function AlumnoDetalle({ alumnoId, onVolver }) {
             >
               + Recuperación
             </button>
+            {recuperaciones.length > 0 && (
+              <button className="link-btn" onClick={() => setMostrarHistorialRecuperaciones(true)}>
+                Ver recuperaciones ({recuperaciones.length})
+              </button>
+            )}
             <button className="btn btn-secondary" onClick={() => setMostrarEditar(true)}>Editar datos</button>
             <button className="btn btn-danger" onClick={eliminarAlumno}>Eliminar alumno</button>
           </div>
@@ -123,6 +135,7 @@ export default function AlumnoDetalle({ alumnoId, onVolver }) {
                   <th>Fecha</th>
                   <th>Actividad</th>
                   <th>Horario</th>
+                  <th></th>
                 </tr>
               </thead>
               <tbody>
@@ -131,6 +144,11 @@ export default function AlumnoDetalle({ alumnoId, onVolver }) {
                     <td>{a.fecha}</td>
                     <td>{a.actividad_nombre || '-'}</td>
                     <td>{a.horario || '-'}</td>
+                    <td>
+                      <button className="link-btn" onClick={() => eliminarAsistencia(a.id)}>
+                        Deshacer
+                      </button>
+                    </td>
                   </tr>
                 ))}
               </tbody>
@@ -190,6 +208,33 @@ export default function AlumnoDetalle({ alumnoId, onVolver }) {
             }}
             onCancelar={() => setMostrarPago(false)}
           />
+        </Modal>
+      )}
+
+      {mostrarHistorialRecuperaciones && (
+        <Modal title="Clases recuperadas" onClose={() => setMostrarHistorialRecuperaciones(false)}>
+          <div className="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Fecha</th>
+                  <th>Clases</th>
+                  <th>Motivo</th>
+                  <th>Trasladada</th>
+                </tr>
+              </thead>
+              <tbody>
+                {recuperaciones.map((r) => (
+                  <tr key={r.id}>
+                    <td>{r.fecha_registro?.slice(0, 10)}</td>
+                    <td>{r.cantidad_clases}</td>
+                    <td>{r.motivo}</td>
+                    <td>{r.trasladada_a_membresia_id ? 'Sí' : '-'}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         </Modal>
       )}
 

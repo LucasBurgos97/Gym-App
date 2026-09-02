@@ -31,6 +31,7 @@ contextBridge.exposeInMainWorld('api', {
   asistencias: {
     estadoParaAsistencia: invoke('asistencias:estado'),
     registrar: invoke('asistencias:registrar'),
+    eliminar: invoke('asistencias:eliminar'),
   },
   recuperaciones: {
     registrar: invoke('recuperaciones:registrar'),
@@ -45,5 +46,8 @@ contextBridge.exposeInMainWorld('api', {
   },
   reportes: {
     ingresos: invoke('reportes:ingresos'),
+  },
+  respaldo: {
+    crear: invoke('respaldo:crear'),
   },
 });

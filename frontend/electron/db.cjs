@@ -30,6 +30,16 @@ function persist() {
   fs.writeFileSync(dbFilePath, Buffer.from(data));
 }
 
+function rutaBaseDatos() {
+  return dbFilePath;
+}
+
+// Fuerza a escribir el estado actual a disco antes de hacer una copia de seguridad.
+function guardarAhora() {
+  persist();
+  return dbFilePath;
+}
+
 function all(sql, params = []) {
   const stmt = db.prepare(sql);
   stmt.bind(params);
@@ -454,6 +464,15 @@ function historialAsistencias(alumnoId) {
   );
 }
 
+// Deshace una asistencia cargada por error: la borra y le devuelve la clase a la membresía.
+function eliminarAsistencia(id) {
+  const asistencia = get('SELECT * FROM asistencias WHERE id = ?', [id]);
+  if (!asistencia) throw new Error('Asistencia no encontrada.');
+  run('DELETE FROM asistencias WHERE id = ?', [id]);
+  run('UPDATE membresias SET clases_usadas = MAX(0, clases_usadas - 1) WHERE id = ?', [asistencia.membresia_id]);
+  return { eliminado: true };
+}
+
 // ---------- Recuperaciones ----------
 
 function registrarRecuperacion({ alumno_id, membresia_id, cantidad_clases, motivo }) {
@@ -643,6 +662,7 @@ module.exports = {
   eliminarActividad,
   registrarPago,
   registrarAsistencia,
+  eliminarAsistencia,
   estadoParaAsistencia,
   registrarRecuperacion,
   historialAlumno,
@@ -653,4 +673,6 @@ module.exports = {
   asistenciasPorFecha,
   diasConAsistenciasEnMes,
   reporteIngresos,
+  rutaBaseDatos,
+  guardarAhora,
 };
