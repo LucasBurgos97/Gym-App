@@ -213,6 +213,9 @@ export default function AlumnoDetalle({ alumnoId, onVolver }) {
 function FormularioPago({ alumnoId, onGuardado, onCancelar }) {
   const [planes, setPlanes] = useState([]);
   const [form, setForm] = useState({ plan_id: '', importe: '', fecha: hoyISO() });
+  const [esExcepcion, setEsExcepcion] = useState(false);
+  const [fechaVencimiento, setFechaVencimiento] = useState('');
+  const [clasesUsadas, setClasesUsadas] = useState('0');
   const [error, setError] = useState('');
   const [guardando, setGuardando] = useState(false);
 
@@ -230,6 +233,18 @@ function FormularioPago({ alumnoId, onGuardado, onCancelar }) {
     setForm((f) => ({ ...f, plan_id: planId, importe: plan ? plan.precio : f.importe }));
   }
 
+  function toggleExcepcion(activar) {
+    setEsExcepcion(activar);
+    if (activar && !fechaVencimiento) {
+      // Solo un punto de partida sugerido (mismo día, un mes después) — el entrenador
+      // lo puede pisar con el vencimiento real que traía el alumno.
+      const [y, m, d] = form.fecha.split('-').map(Number);
+      const ultimoDia = new Date(y, m, 0).getDate();
+      const sugerido = new Date(y, m, Math.min(d, ultimoDia));
+      setFechaVencimiento(sugerido.toISOString().slice(0, 10));
+    }
+  }
+
   async function guardar(e) {
     e.preventDefault();
     setError('');
@@ -241,12 +256,18 @@ function FormularioPago({ alumnoId, onGuardado, onCancelar }) {
       setError('El plan seleccionado no tiene un precio configurado. Poné un precio para ese plan en la pantalla Planes antes de registrar el pago.');
       return;
     }
+    if (esExcepcion && !fechaVencimiento) {
+      setError('Ingresá la fecha de vencimiento real de este alumno.');
+      return;
+    }
     setGuardando(true);
     const res = await window.api.pagos.registrar({
       alumno_id: alumnoId,
       plan_id: Number(form.plan_id),
       importe: Number(form.importe) || 0,
       fecha: form.fecha,
+      fecha_vencimiento: esExcepcion ? fechaVencimiento : undefined,
+      clases_usadas: esExcepcion ? Number(clasesUsadas) || 0 : undefined,
     });
     setGuardando(false);
     if (!res.ok) {
@@ -275,10 +296,34 @@ function FormularioPago({ alumnoId, onGuardado, onCancelar }) {
           <input type="number" value={form.importe} disabled />
         </div>
         <div className="field">
-          <label>Fecha de inicio</label>
+          <label>Fecha de inicio {esExcepcion ? '(fecha real de pago)' : ''}</label>
           <input type="date" value={form.fecha} onChange={(e) => setForm({ ...form, fecha: e.target.value })} />
         </div>
       </div>
+
+      <label style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 16, fontSize: 14 }}>
+        <input type="checkbox" checked={esExcepcion} onChange={(e) => toggleExcepcion(e.target.checked)} />
+        Es un alumno que ya venía pagando antes de usar el sistema (cargar como excepción)
+      </label>
+
+      {esExcepcion && (
+        <div className="form-grid single" style={{ marginTop: 10 }}>
+          <div className="field">
+            <label>Vencimiento real de esta membresía</label>
+            <input type="date" value={fechaVencimiento} onChange={(e) => setFechaVencimiento(e.target.value)} />
+          </div>
+          <div className="field">
+            <label>Clases que ya usó en este período</label>
+            <input
+              type="number"
+              min="0"
+              value={clasesUsadas}
+              onChange={(e) => setClasesUsadas(e.target.value.replace(/[^0-9]/g, ''))}
+            />
+          </div>
+        </div>
+      )}
+
       <div className="form-actions">
         <button className="btn" type="submit" disabled={guardando}>Registrar pago y crear membresía</button>
         <button type="button" className="btn btn-secondary" onClick={onCancelar}>Cancelar</button>

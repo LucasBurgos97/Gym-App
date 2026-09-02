@@ -333,7 +333,7 @@ function historialMembresias(alumnoId) {
 
 // ---------- Pagos y alta de membresía ----------
 
-function registrarPago({ alumno_id, plan_id, importe, fecha }) {
+function registrarPago({ alumno_id, plan_id, importe, fecha, fecha_vencimiento, clases_usadas }) {
   const alumno = obtenerAlumno(alumno_id);
   if (!alumno) throw new Error('Alumno no encontrado.');
   const plan = get('SELECT * FROM planes WHERE id = ?', [plan_id]);
@@ -343,7 +343,13 @@ function registrarPago({ alumno_id, plan_id, importe, fecha }) {
   }
 
   const fechaInicio = fecha || today();
-  const fechaVencimiento = addCalendarMonth(fechaInicio);
+  // fecha_vencimiento: solo se usa para dar de alta alumnos que ya venían pagando
+  // antes de usar el sistema (RN-03 igual aplica por defecto para pagos nuevos).
+  const fechaVencimiento = fecha_vencimiento || addCalendarMonth(fechaInicio);
+  if (fechaVencimiento < fechaInicio) {
+    throw new Error('La fecha de vencimiento no puede ser anterior a la fecha de inicio.');
+  }
+  const clasesUsadasIniciales = clases_usadas ? Math.max(0, Number(clases_usadas)) : 0;
 
   const pagoId = run('INSERT INTO pagos (alumno_id, plan_id, fecha, importe) VALUES (?, ?, ?, ?)', [
     alumno_id,
@@ -367,8 +373,8 @@ function registrarPago({ alumno_id, plan_id, importe, fecha }) {
 
   const membresiaId = run(
     `INSERT INTO membresias (alumno_id, plan_id, pago_id, fecha_inicio, fecha_vencimiento, clases_incluidas, clases_usadas, clases_recuperadas)
-     VALUES (?, ?, ?, ?, ?, ?, 0, ?)`,
-    [alumno_id, plan_id, pagoId, fechaInicio, fechaVencimiento, plan.clases_incluidas, clasesTrasladadas]
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+    [alumno_id, plan_id, pagoId, fechaInicio, fechaVencimiento, plan.clases_incluidas, clasesUsadasIniciales, clasesTrasladadas]
   );
 
   if (clasesTrasladadas > 0) {

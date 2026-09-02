@@ -60,29 +60,15 @@ export default function Asistencia({ onVerAlumno }) {
 
   const { deHoy, otras } = construirOpciones(actividades);
 
-  async function buscar(e) {
-    e?.preventDefault();
-    if (!dni.trim()) return;
-    setBuscando(true);
+  // Compartida por el flujo manual (botón "Registrar asistencia") y el automático
+  // (lector de código de barras/QR: escanea, tipea el DNI y manda Enter).
+  async function registrar(dniValor, seleccionValor) {
     setError('');
-    setMensajeOk('');
-    const res = await window.api.asistencias.estadoParaAsistencia(dni.trim());
-    setBuscando(false);
+    const [actividadIdStr, horario] = seleccionValor.split('|');
+    const res = await window.api.asistencias.registrar(dniValor, Number(actividadIdStr), horario);
     if (!res.ok) {
       setError(res.error);
-      setEstado(null);
-      return;
-    }
-    setEstado(res.data);
-  }
-
-  async function confirmarAsistencia() {
-    setError('');
-    const [actividadIdStr, horario] = seleccion.split('|');
-    const res = await window.api.asistencias.registrar(dni.trim(), Number(actividadIdStr), horario);
-    if (!res.ok) {
-      setError(res.error);
-      return;
+      return false;
     }
     const actividadElegida = actividades.find((a) => a.id === Number(actividadIdStr));
     setMensajeOk(
@@ -94,6 +80,41 @@ export default function Asistencia({ onVerAlumno }) {
     setDni('');
     setSeleccion(elegirPorDefecto(deHoy));
     inputRef.current?.focus();
+    return true;
+  }
+
+  async function buscar(e) {
+    e?.preventDefault();
+    const dniLimpio = dni.trim();
+    if (!dniLimpio) return;
+    setBuscando(true);
+    setError('');
+    setMensajeOk('');
+    const res = await window.api.asistencias.estadoParaAsistencia(dniLimpio);
+    setBuscando(false);
+    if (!res.ok) {
+      setError(res.error);
+      setEstado(null);
+      return;
+    }
+
+    const data = res.data;
+    const autoSeleccion = elegirPorDefecto(deHoy);
+
+    // Con todo en orden (alumno, membresía vigente, clases disponibles y una
+    // actividad de hoy sin ambigüedad), registra directo — pensado para que un
+    // lector USB de QR/código de barras deje la asistencia lista con un solo escaneo.
+    if (data.encontrado && data.membresiaVigente && data.puedeAsistir && autoSeleccion) {
+      const ok = await registrar(dniLimpio, autoSeleccion);
+      if (ok) return;
+    }
+
+    setEstado(data);
+    setSeleccion(autoSeleccion);
+  }
+
+  function confirmarAsistencia() {
+    registrar(dni.trim(), seleccion);
   }
 
   function alumnoCreado(alumno) {
@@ -106,7 +127,7 @@ export default function Asistencia({ onVerAlumno }) {
     <div>
       <div className="page-header">
         <h1>Registrar asistencia</h1>
-        <p>Ingresá el DNI del alumno para verificar su membresía y marcar la asistencia de hoy.</p>
+        <p>Ingresá el DNI del alumno (a mano o con un lector USB de QR/código de barras) para marcar la asistencia de hoy.</p>
       </div>
 
       <div className="card">
