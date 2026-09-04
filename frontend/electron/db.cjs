@@ -95,18 +95,24 @@ async function init(userDataDir) {
   }
 
   // Migración: los horarios pasan a ser solo la hora del bloque (sin minutos), ej.
-  // "16:00" -> "16" representa la clase de 16 a 17hs. Es idempotente: si ya no
-  // tienen ":00" no los toca.
+  // "16:00" -> "16" representa la clase de 16 a 17hs. Se descarta cualquier minuto
+  // (no solo ":00", por si había horarios viejos que no caían justo en la hora) y
+  // se saca el cero inicial. Es idempotente: un valor que ya es solo la hora no matchea.
+  function soloHora(valor) {
+    return valor.trim().replace(/^0?(\d{1,2}):\d{2}$/, '$1');
+  }
   for (const act of all('SELECT id, horarios FROM actividades')) {
-    const normalizado = act.horarios
-      .split(',')
-      .map((h) => h.trim().replace(/^0?(\d{1,2}):00$/, '$1'))
-      .join(',');
+    const normalizado = act.horarios.split(',').map(soloHora).join(',');
     if (normalizado !== act.horarios) {
       run('UPDATE actividades SET horarios = ? WHERE id = ?', [normalizado, act.id]);
     }
   }
-  run("UPDATE asistencias SET horario = REPLACE(horario, ':00', '') WHERE horario LIKE '%:00'");
+  for (const asi of all("SELECT id, horario FROM asistencias WHERE horario LIKE '%:%'")) {
+    const normalizado = soloHora(asi.horario);
+    if (normalizado !== asi.horario) {
+      run('UPDATE asistencias SET horario = ? WHERE id = ?', [normalizado, asi.id]);
+    }
+  }
 
   const planCount = get('SELECT COUNT(*) AS c FROM planes').c;
   if (planCount === 0) {

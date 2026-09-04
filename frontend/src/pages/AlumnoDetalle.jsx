@@ -43,7 +43,11 @@ export default function AlumnoDetalle({ alumnoId, onVolver }) {
   async function eliminarAsistencia(id) {
     if (!window.confirm('¿Deshacer esta asistencia? Le devuelve la clase a la membresía.')) return;
     const res = await window.api.asistencias.eliminar(id);
-    if (res.ok) cargar();
+    if (!res.ok) {
+      window.alert(res.error);
+      return;
+    }
+    cargar();
   }
 
   async function eliminarAlumno() {
@@ -345,8 +349,9 @@ function FormularioPago({ alumnoId, onGuardado, onCancelar }) {
       // Solo un punto de partida sugerido (mismo día, un mes después) — el entrenador
       // lo puede pisar con el vencimiento real que traía el alumno.
       const [y, m, d] = form.fecha.split('-').map(Number);
-      const ultimoDia = new Date(y, m, 0).getDate();
-      const sugerido = new Date(y, m, Math.min(d, ultimoDia));
+      const targetMonthIndex = m; // 0-based next month (mismo truco que addCalendarMonth en db.cjs)
+      const ultimoDia = new Date(y, targetMonthIndex + 1, 0).getDate();
+      const sugerido = new Date(y, targetMonthIndex, Math.min(d, ultimoDia));
       setFechaVencimiento(sugerido.toISOString().slice(0, 10));
     }
   }
