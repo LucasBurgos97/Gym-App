@@ -39,7 +39,13 @@ function FilaPlan({ plan, onGuardado, onEliminado }) {
   return (
     <tr>
       <td>
-        <input className="table-input" value={nombre} onChange={(e) => setNombre(e.target.value)} style={{ width: 170 }} />
+        <input
+          className="table-input"
+          value={nombre}
+          onChange={(e) => setNombre(e.target.value)}
+          onFocus={(e) => e.target.select()}
+          style={{ width: 170 }}
+        />
       </td>
       <td>
         <input
@@ -47,6 +53,7 @@ function FilaPlan({ plan, onGuardado, onEliminado }) {
           value={clasesIncluidas}
           placeholder="Ilimitado"
           onChange={(e) => setClasesIncluidas(e.target.value.replace(/[^0-9]/g, ''))}
+          onFocus={(e) => e.target.select()}
           style={{ width: 80 }}
         />
       </td>
@@ -56,6 +63,7 @@ function FilaPlan({ plan, onGuardado, onEliminado }) {
           type="number"
           value={precio}
           onChange={(e) => setPrecio(e.target.value)}
+          onFocus={(e) => e.target.select()}
           style={{ width: 90 }}
         />
       </td>
@@ -149,13 +157,18 @@ export default function Planes() {
         <form onSubmit={crear} className="form-grid">
           <div className="field">
             <label>Nombre</label>
-            <input value={nuevo.nombre} onChange={(e) => setNuevo({ ...nuevo, nombre: e.target.value })} />
+            <input
+              value={nuevo.nombre}
+              onChange={(e) => setNuevo({ ...nuevo, nombre: e.target.value })}
+              onFocus={(e) => e.target.select()}
+            />
           </div>
           <div className="field">
             <label>Clases incluidas (vacío = ilimitado)</label>
             <input
               value={nuevo.clases_incluidas}
               onChange={(e) => setNuevo({ ...nuevo, clases_incluidas: e.target.value.replace(/[^0-9]/g, '') })}
+              onFocus={(e) => e.target.select()}
             />
           </div>
           <div className="field">
@@ -164,6 +177,7 @@ export default function Planes() {
               type="number"
               value={nuevo.precio}
               onChange={(e) => setNuevo({ ...nuevo, precio: e.target.value })}
+              onFocus={(e) => e.target.select()}
             />
           </div>
           <div className="field" style={{ justifyContent: 'flex-end' }}>

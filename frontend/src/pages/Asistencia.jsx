@@ -2,6 +2,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import Alert from '../components/Alert.jsx';
 import Modal from '../components/Modal.jsx';
 import AlumnoForm from '../components/AlumnoForm.jsx';
+import { formatBloque } from '../utils/horario.js';
 
 const DIAS_JS = ['domingo', 'lunes', 'martes', 'miercoles', 'jueves', 'viernes', 'sabado'];
 
@@ -9,9 +10,9 @@ function diaDeHoy() {
   return DIAS_JS[new Date().getDay()];
 }
 
-function horaActualStr() {
-  const d = new Date();
-  return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
+// Cada horario es solo la hora de inicio del bloque de 1 hora (sin minutos): "16" = clase de 16 a 17hs.
+function horaActual() {
+  return String(new Date().getHours());
 }
 
 function construirOpciones(actividades) {
@@ -21,20 +22,26 @@ function construirOpciones(actividades) {
   actividades.forEach((act) => {
     const esHoy = act.dias.includes(hoy);
     act.horarios.forEach((h) => {
-      const opt = { value: `${act.id}|${h}`, actividad_id: act.id, horario: h, label: `${act.nombre} — ${h}` };
+      const opt = {
+        value: `${act.id}|${h}`,
+        actividad_id: act.id,
+        actividad_nombre: act.nombre,
+        horario: h,
+        label: `${act.nombre} — ${formatBloque(h)}`,
+      };
       (esHoy ? deHoy : otras).push(opt);
     });
   });
-  deHoy.sort((a, b) => a.horario.localeCompare(b.horario));
+  deHoy.sort((a, b) => Number(a.horario) - Number(b.horario));
   otras.sort((a, b) => a.label.localeCompare(b.label));
   return { deHoy, otras };
 }
 
-function elegirPorDefecto(deHoy) {
-  if (deHoy.length === 0) return '';
-  const ahora = horaActualStr();
-  const pasadas = deHoy.filter((o) => o.horario <= ahora);
-  return (pasadas[pasadas.length - 1] || deHoy[0]).value;
+// Actividad de hoy cuyo bloque horario incluye "ahora" — solo si hay una sola
+// coincidencia sin ambigüedad (dos personalizadas pueden compartir horario).
+function actividadDeAhora(deHoy) {
+  const coincidencias = deHoy.filter((o) => o.horario === horaActual());
+  return coincidencias.length === 1 ? coincidencias[0] : null;
 }
 
 export default function Asistencia({ onVerAlumno }) {
@@ -50,23 +57,21 @@ export default function Asistencia({ onVerAlumno }) {
 
   useEffect(() => {
     window.api.actividades.listar(true).then((res) => {
-      if (res.ok) {
-        setActividades(res.data);
-        const { deHoy } = construirOpciones(res.data);
-        setSeleccion(elegirPorDefecto(deHoy));
-      }
+      if (res.ok) setActividades(res.data);
     });
   }, []);
 
   const { deHoy, otras } = construirOpciones(actividades);
+  const actividadActual = actividadDeAhora(deHoy);
 
   async function buscar(e) {
     e?.preventDefault();
-    if (!dni.trim()) return;
+    const dniLimpio = dni.trim();
+    if (!dniLimpio) return;
     setBuscando(true);
     setError('');
     setMensajeOk('');
-    const res = await window.api.asistencias.estadoParaAsistencia(dni.trim());
+    const res = await window.api.asistencias.estadoParaAsistencia(dniLimpio);
     setBuscando(false);
     if (!res.ok) {
       setError(res.error);
@@ -74,6 +79,9 @@ export default function Asistencia({ onVerAlumno }) {
       return;
     }
     setEstado(res.data);
+    // Si hay una única clase corriendo ahora mismo, la dejamos pre-seleccionada
+    // para que el profesor solo tenga que confirmar — nunca se registra sola.
+    setSeleccion(actividadActual ? actividadActual.value : '');
   }
 
   async function confirmarAsistencia() {
@@ -87,12 +95,12 @@ export default function Asistencia({ onVerAlumno }) {
     const actividadElegida = actividades.find((a) => a.id === Number(actividadIdStr));
     setMensajeOk(
       `Asistencia registrada para ${res.data.alumno.nombre} ${res.data.alumno.apellido}` +
-        (actividadElegida ? ` — ${actividadElegida.nombre} (${horario})` : '') +
+        (actividadElegida ? ` — ${actividadElegida.nombre} (${formatBloque(horario)})` : '') +
         '.'
     );
     setEstado(null);
     setDni('');
-    setSeleccion(elegirPorDefecto(deHoy));
+    setSeleccion('');
     inputRef.current?.focus();
   }
 
@@ -106,7 +114,7 @@ export default function Asistencia({ onVerAlumno }) {
     <div>
       <div className="page-header">
         <h1>Registrar asistencia</h1>
-        <p>Ingresá el DNI del alumno para verificar su membresía y marcar la asistencia de hoy.</p>
+        <p>Ingresá el DNI del alumno (a mano o con un lector USB de QR/código de barras) para marcar la asistencia de hoy.</p>
       </div>
 
       <div className="card">
@@ -169,8 +177,17 @@ export default function Asistencia({ onVerAlumno }) {
               )}
 
               {estado.membresiaVigente && estado.puedeAsistir && (
-                <div className="field" style={{ maxWidth: 320, marginTop: 16 }}>
-                  <label>Actividad de hoy</label>
+                <div className="field" style={{ maxWidth: 340, marginTop: 16 }}>
+                  {actividadActual ? (
+                    <p style={{ margin: '0 0 8px', fontWeight: 600 }}>
+                      ¿Viene a {actividadActual.actividad_nombre} ({formatBloque(actividadActual.horario)})?
+                    </p>
+                  ) : (
+                    <p className="muted" style={{ margin: '0 0 8px', fontSize: 13.5 }}>
+                      No hay una clase corriendo justo ahora — elegí a cuál viene.
+                    </p>
+                  )}
+                  <label>Actividad</label>
                   <select value={seleccion} onChange={(e) => setSeleccion(e.target.value)}>
                     <option value="">Seleccioná una actividad...</option>
                     {deHoy.length > 0 && (
@@ -197,7 +214,7 @@ export default function Asistencia({ onVerAlumno }) {
                 disabled={!estado.puedeAsistir || !seleccion}
                 onClick={confirmarAsistencia}
               >
-                Registrar asistencia
+                {actividadActual ? 'Sí, registrar asistencia' : 'Registrar asistencia'}
               </button>
               <button className="btn btn-secondary" onClick={() => onVerAlumno(estado.alumno.id)}>
                 Ver ficha del alumno

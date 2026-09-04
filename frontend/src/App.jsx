@@ -7,6 +7,7 @@ import Actividades from './pages/Actividades.jsx';
 import Vencimientos from './pages/Vencimientos.jsx';
 import Calendario from './pages/Calendario.jsx';
 import Reportes from './pages/Reportes.jsx';
+import Backup from './pages/Backup.jsx';
 import Reloj from './components/Reloj.jsx';
 import ErrorBoundary from './components/ErrorBoundary.jsx';
 import logoUrl from './assets/logo.png';
@@ -19,6 +20,7 @@ const NAV_ITEMS = [
   { key: 'reportes', label: 'Ingresos', icon: '💰' },
   { key: 'planes', label: 'Planes', icon: '📋' },
   { key: 'actividades', label: 'Actividades', icon: '🏋️' },
+  { key: 'backup', label: 'Backup', icon: '💾' },
 ];
 
 export default function App() {
@@ -73,6 +75,7 @@ export default function App() {
             )}
             {view === 'planes' && <Planes />}
             {view === 'actividades' && <Actividades />}
+            {view === 'backup' && <Backup />}
           </ErrorBoundary>
         </div>
       </main>

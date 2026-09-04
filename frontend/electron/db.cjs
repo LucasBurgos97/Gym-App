@@ -25,9 +25,38 @@ function addCalendarMonth(dateStr) {
   return result.toISOString().slice(0, 10);
 }
 
+let deferirPersistencia = false;
+
 function persist() {
+  if (deferirPersistencia) return;
   const data = db.export();
   fs.writeFileSync(dbFilePath, Buffer.from(data));
+}
+
+// Agrupa varias llamadas a run() dentro de fn en una sola escritura a disco al final,
+// en vez de una por cada INSERT/UPDATE/DELETE.
+function transaction(fn) {
+  if (deferirPersistencia) return fn(); // ya estamos dentro de otra transacción
+  deferirPersistencia = true;
+  try {
+    const resultado = fn();
+    deferirPersistencia = false;
+    persist();
+    return resultado;
+  } catch (err) {
+    deferirPersistencia = false;
+    throw err;
+  }
+}
+
+function rutaBaseDatos() {
+  return dbFilePath;
+}
+
+// Fuerza a escribir el estado actual a disco antes de hacer una copia de seguridad.
+function guardarAhora() {
+  persist();
+  return dbFilePath;
 }
 
 function all(sql, params = []) {
@@ -68,20 +97,46 @@ async function init(userDataDir) {
   const schema = fs.readFileSync(path.join(__dirname, '..', '..', 'database', 'schema.sql'), 'utf-8');
   db.run(schema);
 
-  // Migración liviana: si la base ya existía de antes de agregar actividades,
-  // el CREATE TABLE IF NOT EXISTS de arriba no toca la tabla asistencias existente.
-  const columnasAsistencias = all('PRAGMA table_info(asistencias)').map((c) => c.name);
-  if (!columnasAsistencias.includes('actividad_id')) {
-    db.run('ALTER TABLE asistencias ADD COLUMN actividad_id INTEGER');
-  }
-  if (!columnasAsistencias.includes('horario')) {
-    db.run('ALTER TABLE asistencias ADD COLUMN horario TEXT');
-  }
+  // Migraciones puntuales sobre bases que ya existían de versiones anteriores de la
+  // app. Gateadas por PRAGMA user_version para no re-ejecutarlas en cada arranque
+  // una vez aplicadas — cada bloque nuevo suma 1 a VERSION_MIGRACIONES.
+  const VERSION_MIGRACIONES = 1;
+  const versionActual = get('PRAGMA user_version').user_version;
+  if (versionActual < VERSION_MIGRACIONES) {
+    // Si la base ya existía de antes de agregar actividades, el CREATE TABLE IF NOT
+    // EXISTS de arriba no toca la tabla asistencias existente.
+    const columnasAsistencias = all('PRAGMA table_info(asistencias)').map((c) => c.name);
+    if (!columnasAsistencias.includes('actividad_id')) {
+      db.run('ALTER TABLE asistencias ADD COLUMN actividad_id INTEGER');
+    }
+    if (!columnasAsistencias.includes('horario')) {
+      db.run('ALTER TABLE asistencias ADD COLUMN horario TEXT');
+    }
 
-  const columnasActividades = all('PRAGMA table_info(actividades)').map((c) => c.name);
-  if (!columnasActividades.includes('personalizada')) {
-    db.run('ALTER TABLE actividades ADD COLUMN personalizada INTEGER NOT NULL DEFAULT 0');
-    db.run("UPDATE actividades SET personalizada = 1 WHERE nombre = 'Entrenamiento Personalizado'");
+    const columnasActividades = all('PRAGMA table_info(actividades)').map((c) => c.name);
+    if (!columnasActividades.includes('personalizada')) {
+      db.run('ALTER TABLE actividades ADD COLUMN personalizada INTEGER NOT NULL DEFAULT 0');
+      db.run("UPDATE actividades SET personalizada = 1 WHERE nombre = 'Entrenamiento Personalizado'");
+    }
+
+    // Los horarios pasan a ser solo la hora del bloque (sin minutos), ej. "16:00" ->
+    // "16" representa la clase de 16 a 17hs. Se descarta cualquier minuto (no solo
+    // ":00", por si había horarios viejos que no caían justo en la hora).
+    const soloHora = (valor) => valor.trim().replace(/^0?(\d{1,2}):\d{2}$/, '$1');
+    for (const act of all('SELECT id, horarios FROM actividades')) {
+      const normalizado = act.horarios.split(',').map(soloHora).join(',');
+      if (normalizado !== act.horarios) {
+        run('UPDATE actividades SET horarios = ? WHERE id = ?', [normalizado, act.id]);
+      }
+    }
+    for (const asi of all("SELECT id, horario FROM asistencias WHERE horario LIKE '%:%'")) {
+      const normalizado = soloHora(asi.horario);
+      if (normalizado !== asi.horario) {
+        run('UPDATE asistencias SET horario = ? WHERE id = ?', [normalizado, asi.id]);
+      }
+    }
+
+    db.run(`PRAGMA user_version = ${VERSION_MIGRACIONES}`);
   }
 
   const planCount = get('SELECT COUNT(*) AS c FROM planes').c;
@@ -94,16 +149,16 @@ async function init(userDataDir) {
   const actividadCount = get('SELECT COUNT(*) AS c FROM actividades').c;
   if (actividadCount === 0) {
     run('INSERT INTO actividades (nombre, dias, horarios, activo) VALUES (?, ?, ?, 1)', [
-      'Full Training', 'lunes,miercoles,viernes', '10:00,18:00,19:00,20:00,21:00',
+      'Full Training', 'lunes,miercoles,viernes', '10,18,19,20,21',
     ]);
     run('INSERT INTO actividades (nombre, dias, horarios, activo) VALUES (?, ?, ?, 1)', [
-      'Funcional para Adultos', 'martes,jueves', '18:00',
+      'Funcional para Adultos', 'martes,jueves', '18',
     ]);
     run('INSERT INTO actividades (nombre, dias, horarios, activo, personalizada) VALUES (?, ?, ?, 1, 1)', [
-      'Entrenamiento Personalizado', 'lunes,miercoles,viernes', '08:00,09:00,16:00,17:00',
+      'Entrenamiento Personalizado', 'lunes,miercoles,viernes', '8,9,16,17',
     ]);
     run('INSERT INTO actividades (nombre, dias, horarios, activo) VALUES (?, ?, ?, 1)', [
-      'Full Training al Aire Libre', 'martes,jueves', '19:00,21:00',
+      'Full Training al Aire Libre', 'martes,jueves', '19,21',
     ]);
   }
 
@@ -112,25 +167,24 @@ async function init(userDataDir) {
 
 // ---------- Alumnos ----------
 
-function crearAlumno({ dni, nombre, apellido, telefono, email }) {
+function crearAlumno({ dni, nombre, apellido, telefono }) {
   dni = String(dni).trim();
   if (!dni) throw new Error('El DNI es obligatorio.');
   if (!nombre || !apellido) throw new Error('Nombre y apellido son obligatorios.');
   const existente = get('SELECT id FROM alumnos WHERE dni = ?', [dni]);
   if (existente) throw new Error('Ya existe un alumno registrado con ese DNI.');
   const id = run(
-    'INSERT INTO alumnos (dni, nombre, apellido, telefono, email) VALUES (?, ?, ?, ?, ?)',
-    [dni, nombre, apellido, telefono || null, email || null]
+    'INSERT INTO alumnos (dni, nombre, apellido, telefono) VALUES (?, ?, ?, ?)',
+    [dni, nombre, apellido, telefono || null]
   );
   return get('SELECT * FROM alumnos WHERE id = ?', [id]);
 }
 
-function actualizarAlumno(id, { nombre, apellido, telefono, email }) {
-  run('UPDATE alumnos SET nombre = ?, apellido = ?, telefono = ?, email = ? WHERE id = ?', [
+function actualizarAlumno(id, { nombre, apellido, telefono }) {
+  run('UPDATE alumnos SET nombre = ?, apellido = ?, telefono = ? WHERE id = ?', [
     nombre,
     apellido,
     telefono || null,
-    email || null,
     id,
   ]);
   return get('SELECT * FROM alumnos WHERE id = ?', [id]);
@@ -333,7 +387,7 @@ function historialMembresias(alumnoId) {
 
 // ---------- Pagos y alta de membresía ----------
 
-function registrarPago({ alumno_id, plan_id, importe, fecha }) {
+function registrarPago({ alumno_id, plan_id, importe, fecha, fecha_vencimiento, clases_usadas }) {
   const alumno = obtenerAlumno(alumno_id);
   if (!alumno) throw new Error('Alumno no encontrado.');
   const plan = get('SELECT * FROM planes WHERE id = ?', [plan_id]);
@@ -343,42 +397,91 @@ function registrarPago({ alumno_id, plan_id, importe, fecha }) {
   }
 
   const fechaInicio = fecha || today();
-  const fechaVencimiento = addCalendarMonth(fechaInicio);
-
-  const pagoId = run('INSERT INTO pagos (alumno_id, plan_id, fecha, importe) VALUES (?, ?, ?, ?)', [
-    alumno_id,
-    plan_id,
-    fechaInicio,
-    Number(importe),
-  ]);
-
-  // RN-10: si la membresía anterior venció con clases recuperadas sin usar, se trasladan a la nueva.
-  const anterior = get(
-    `SELECT * FROM membresias WHERE alumno_id = ? ORDER BY fecha_inicio DESC LIMIT 1`,
-    [alumno_id]
-  );
-  let clasesTrasladadas = 0;
-  if (anterior && anterior.fecha_vencimiento < fechaInicio) {
-    // Clases del pool combinado (incluidas + recuperadas) que quedaron sin usar,
-    // acotadas a lo otorgado por recuperación (las clases base del plan no se trasladan).
-    const poolSinUsar = Math.max(0, (anterior.clases_incluidas || 0) + anterior.clases_recuperadas - anterior.clases_usadas);
-    clasesTrasladadas = Math.min(anterior.clases_recuperadas, poolSinUsar);
+  // fecha_vencimiento: solo se usa para dar de alta alumnos que ya venían pagando
+  // antes de usar el sistema (RN-03 igual aplica por defecto para pagos nuevos).
+  const fechaVencimiento = fecha_vencimiento || addCalendarMonth(fechaInicio);
+  if (fechaVencimiento < fechaInicio) {
+    throw new Error('La fecha de vencimiento no puede ser anterior a la fecha de inicio.');
   }
+  const clasesUsadasIniciales = clases_usadas ? Math.max(0, Number(clases_usadas)) : 0;
 
-  const membresiaId = run(
-    `INSERT INTO membresias (alumno_id, plan_id, pago_id, fecha_inicio, fecha_vencimiento, clases_incluidas, clases_usadas, clases_recuperadas)
-     VALUES (?, ?, ?, ?, ?, ?, 0, ?)`,
-    [alumno_id, plan_id, pagoId, fechaInicio, fechaVencimiento, plan.clases_incluidas, clasesTrasladadas]
-  );
-
-  if (clasesTrasladadas > 0) {
-    run('UPDATE recuperaciones SET trasladada_a_membresia_id = ? WHERE membresia_id = ? AND trasladada_a_membresia_id IS NULL', [
-      membresiaId,
-      anterior.id,
+  return transaction(() => {
+    const pagoId = run('INSERT INTO pagos (alumno_id, plan_id, fecha, importe) VALUES (?, ?, ?, ?)', [
+      alumno_id,
+      plan_id,
+      fechaInicio,
+      Number(importe),
     ]);
+
+    // RN-10: si la membresía anterior venció con clases recuperadas sin usar, se trasladan a la nueva.
+    const anterior = get(
+      `SELECT * FROM membresias WHERE alumno_id = ? ORDER BY fecha_inicio DESC LIMIT 1`,
+      [alumno_id]
+    );
+    let clasesTrasladadas = 0;
+    if (anterior && anterior.fecha_vencimiento < fechaInicio) {
+      // Clases del pool combinado (incluidas + recuperadas) que quedaron sin usar,
+      // acotadas a lo otorgado por recuperación (las clases base del plan no se trasladan).
+      const poolSinUsar = Math.max(0, (anterior.clases_incluidas || 0) + anterior.clases_recuperadas - anterior.clases_usadas);
+      clasesTrasladadas = Math.min(anterior.clases_recuperadas, poolSinUsar);
+    }
+
+    const membresiaId = run(
+      `INSERT INTO membresias (alumno_id, plan_id, pago_id, fecha_inicio, fecha_vencimiento, clases_incluidas, clases_usadas, clases_recuperadas)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+      [alumno_id, plan_id, pagoId, fechaInicio, fechaVencimiento, plan.clases_incluidas, clasesUsadasIniciales, clasesTrasladadas]
+    );
+
+    if (clasesTrasladadas > 0) {
+      run('UPDATE recuperaciones SET trasladada_a_membresia_id = ? WHERE membresia_id = ? AND trasladada_a_membresia_id IS NULL', [
+        membresiaId,
+        anterior.id,
+      ]);
+    }
+
+    return get('SELECT * FROM membresias WHERE id = ?', [membresiaId]);
+  });
+}
+
+// Corrige un importe mal tipeado. No toca fechas ni clases: para eso hay que
+// eliminar el pago (si todavía se puede) y cargarlo de nuevo.
+function actualizarImportePago(id, importe) {
+  const pago = get('SELECT * FROM pagos WHERE id = ?', [id]);
+  if (!pago) throw new Error('Pago no encontrado.');
+  if (!importe || Number(importe) <= 0) throw new Error('El importe debe ser mayor a 0.');
+  run('UPDATE pagos SET importe = ? WHERE id = ?', [Number(importe), id]);
+  return get('SELECT * FROM pagos WHERE id = ?', [id]);
+}
+
+// Deshace un pago cargado por error (alumno equivocado, doble clic, etc.).
+// Solo se permite si la membresía que generó todavía no tiene asistencias ni
+// recuperaciones registradas — si ya se usó, borrar el pago borraría historial real.
+function eliminarPago(id) {
+  const pago = get('SELECT * FROM pagos WHERE id = ?', [id]);
+  if (!pago) throw new Error('Pago no encontrado.');
+
+  const membresia = get('SELECT * FROM membresias WHERE pago_id = ?', [id]);
+  if (membresia) {
+    const enUso = get(
+      'SELECT (SELECT COUNT(*) FROM asistencias WHERE membresia_id = ?) + (SELECT COUNT(*) FROM recuperaciones WHERE membresia_id = ?) AS c',
+      [membresia.id, membresia.id]
+    ).c;
+    if (enUso > 0) {
+      throw new Error('Esta membresía ya tiene asistencias o recuperaciones registradas y no se puede eliminar. Si el importe está mal, corregilo en su lugar.');
+    }
   }
 
-  return get('SELECT * FROM membresias WHERE id = ?', [membresiaId]);
+  return transaction(() => {
+    if (membresia) {
+      // Si esta membresía había recibido clases recuperadas trasladadas de la anterior,
+      // que esa recuperación vuelva a quedar "sin trasladar" en vez de apuntar a un id borrado.
+      run('UPDATE recuperaciones SET trasladada_a_membresia_id = NULL WHERE trasladada_a_membresia_id = ?', [membresia.id]);
+      run('DELETE FROM membresias WHERE id = ?', [membresia.id]);
+    }
+
+    run('DELETE FROM pagos WHERE id = ?', [id]);
+    return { eliminado: true };
+  });
 }
 
 // ---------- Asistencias ----------
@@ -446,6 +549,17 @@ function historialAsistencias(alumnoId) {
      WHERE asi.alumno_id = ? ORDER BY asi.fecha DESC`,
     [alumnoId]
   );
+}
+
+// Deshace una asistencia cargada por error: la borra y le devuelve la clase a la membresía.
+function eliminarAsistencia(id) {
+  const asistencia = get('SELECT * FROM asistencias WHERE id = ?', [id]);
+  if (!asistencia) throw new Error('Asistencia no encontrada.');
+  return transaction(() => {
+    run('DELETE FROM asistencias WHERE id = ?', [id]);
+    run('UPDATE membresias SET clases_usadas = MAX(0, clases_usadas - 1) WHERE id = ?', [asistencia.membresia_id]);
+    return { eliminado: true };
+  });
 }
 
 // ---------- Recuperaciones ----------
@@ -636,7 +750,10 @@ module.exports = {
   actualizarActividad,
   eliminarActividad,
   registrarPago,
+  actualizarImportePago,
+  eliminarPago,
   registrarAsistencia,
+  eliminarAsistencia,
   estadoParaAsistencia,
   registrarRecuperacion,
   historialAlumno,
@@ -647,4 +764,6 @@ module.exports = {
   asistenciasPorFecha,
   diasConAsistenciasEnMes,
   reporteIngresos,
+  rutaBaseDatos,
+  guardarAhora,
 };

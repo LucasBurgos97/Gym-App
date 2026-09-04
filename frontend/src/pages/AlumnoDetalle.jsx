@@ -2,6 +2,8 @@ import React, { useEffect, useState } from 'react';
 import Modal from '../components/Modal.jsx';
 import Alert from '../components/Alert.jsx';
 import AlumnoForm from '../components/AlumnoForm.jsx';
+import Carnet from '../components/Carnet.jsx';
+import { formatBloque } from '../utils/horario.js';
 
 function hoyISO() {
   return new Date().toISOString().slice(0, 10);
@@ -13,6 +15,8 @@ export default function AlumnoDetalle({ alumnoId, onVolver }) {
   const [mostrarEditar, setMostrarEditar] = useState(false);
   const [mostrarPago, setMostrarPago] = useState(false);
   const [mostrarRecuperacion, setMostrarRecuperacion] = useState(false);
+  const [mostrarHistorialRecuperaciones, setMostrarHistorialRecuperaciones] = useState(false);
+  const [mostrarCarnet, setMostrarCarnet] = useState(false);
 
   async function cargar() {
     setCargando(true);
@@ -27,8 +31,18 @@ export default function AlumnoDetalle({ alumnoId, onVolver }) {
 
   if (cargando || !datos) return <p className="muted">Cargando...</p>;
 
-  const { alumno, membresias, pagos, asistencias } = datos;
+  const { alumno, membresias, pagos, asistencias, recuperaciones } = datos;
   const membresiaActual = membresias.find((m) => m.estado === 'activa');
+
+  async function eliminarAsistencia(id) {
+    if (!window.confirm('¿Deshacer esta asistencia? Le devuelve la clase a la membresía.')) return;
+    const res = await window.api.asistencias.eliminar(id);
+    if (!res.ok) {
+      window.alert(res.error);
+      return;
+    }
+    cargar();
+  }
 
   async function eliminarAlumno() {
     const confirmado = window.confirm(
@@ -50,7 +64,7 @@ export default function AlumnoDetalle({ alumnoId, onVolver }) {
           <div>
             <h2>{alumno.nombre} {alumno.apellido}</h2>
             <p className="muted">
-              DNI {alumno.dni} {alumno.telefono ? `· ${alumno.telefono}` : ''} {alumno.email ? `· ${alumno.email}` : ''}
+              DNI {alumno.dni} {alumno.telefono ? `· ${alumno.telefono}` : ''}
             </p>
             {membresiaActual ? (
               <span className="badge badge-activa">Membresía activa · {membresiaActual.plan_nombre}</span>
@@ -60,6 +74,7 @@ export default function AlumnoDetalle({ alumnoId, onVolver }) {
           </div>
           <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
             <button className="btn" onClick={() => setMostrarPago(true)}>Registrar pago</button>
+            <button className="btn btn-secondary" onClick={() => setMostrarCarnet(true)}>Carnet / QR</button>
             <button
               className="btn btn-secondary"
               disabled={!membresiaActual}
@@ -67,6 +82,11 @@ export default function AlumnoDetalle({ alumnoId, onVolver }) {
             >
               + Recuperación
             </button>
+            {recuperaciones.length > 0 && (
+              <button className="link-btn" onClick={() => setMostrarHistorialRecuperaciones(true)}>
+                Ver recuperaciones ({recuperaciones.length})
+              </button>
+            )}
             <button className="btn btn-secondary" onClick={() => setMostrarEditar(true)}>Editar datos</button>
             <button className="btn btn-danger" onClick={eliminarAlumno}>Eliminar alumno</button>
           </div>
@@ -123,6 +143,7 @@ export default function AlumnoDetalle({ alumnoId, onVolver }) {
                   <th>Fecha</th>
                   <th>Actividad</th>
                   <th>Horario</th>
+                  <th></th>
                 </tr>
               </thead>
               <tbody>
@@ -130,7 +151,12 @@ export default function AlumnoDetalle({ alumnoId, onVolver }) {
                   <tr key={a.id}>
                     <td>{a.fecha}</td>
                     <td>{a.actividad_nombre || '-'}</td>
-                    <td>{a.horario || '-'}</td>
+                    <td>{formatBloque(a.horario)}</td>
+                    <td>
+                      <button className="link-btn" onClick={() => eliminarAsistencia(a.id)}>
+                        Deshacer
+                      </button>
+                    </td>
                   </tr>
                 ))}
               </tbody>
@@ -151,15 +177,12 @@ export default function AlumnoDetalle({ alumnoId, onVolver }) {
                   <th>Fecha</th>
                   <th>Plan</th>
                   <th>Importe</th>
+                  <th></th>
                 </tr>
               </thead>
               <tbody>
                 {pagos.map((p) => (
-                  <tr key={p.id}>
-                    <td>{p.fecha}</td>
-                    <td>{p.plan_nombre}</td>
-                    <td>${p.importe}</td>
-                  </tr>
+                  <FilaPago key={p.id} pago={p} onCambio={cargar} />
                 ))}
               </tbody>
             </table>
@@ -193,6 +216,35 @@ export default function AlumnoDetalle({ alumnoId, onVolver }) {
         </Modal>
       )}
 
+      {mostrarCarnet && <Carnet alumno={alumno} onClose={() => setMostrarCarnet(false)} />}
+
+      {mostrarHistorialRecuperaciones && (
+        <Modal title="Clases recuperadas" onClose={() => setMostrarHistorialRecuperaciones(false)}>
+          <div className="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Fecha</th>
+                  <th>Clases</th>
+                  <th>Motivo</th>
+                  <th>Trasladada</th>
+                </tr>
+              </thead>
+              <tbody>
+                {recuperaciones.map((r) => (
+                  <tr key={r.id}>
+                    <td>{r.fecha_registro?.slice(0, 10)}</td>
+                    <td>{r.cantidad_clases}</td>
+                    <td>{r.motivo}</td>
+                    <td>{r.trasladada_a_membresia_id ? 'Sí' : '-'}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </Modal>
+      )}
+
       {mostrarRecuperacion && membresiaActual && (
         <Modal title="Registrar clases recuperadas" onClose={() => setMostrarRecuperacion(false)}>
           <FormularioRecuperacion
@@ -210,9 +262,64 @@ export default function AlumnoDetalle({ alumnoId, onVolver }) {
   );
 }
 
+function FilaPago({ pago, onCambio }) {
+  const [importe, setImporte] = useState(pago.importe);
+  const [error, setError] = useState('');
+  const [guardando, setGuardando] = useState(false);
+
+  async function guardar() {
+    setError('');
+    setGuardando(true);
+    const res = await window.api.pagos.actualizarImporte(pago.id, Number(importe));
+    setGuardando(false);
+    if (!res.ok) {
+      setError(res.error);
+      return;
+    }
+    onCambio();
+  }
+
+  async function eliminar() {
+    if (!window.confirm('¿Eliminar este pago y la membresía que generó? Solo se puede si todavía no tiene asistencias ni recuperaciones.')) return;
+    const res = await window.api.pagos.eliminar(pago.id);
+    if (!res.ok) {
+      setError(res.error);
+      return;
+    }
+    onCambio();
+  }
+
+  return (
+    <tr>
+      <td>{pago.fecha}</td>
+      <td>{pago.plan_nombre}</td>
+      <td>
+        $<input
+          className="table-input"
+          type="number"
+          value={importe}
+          onChange={(e) => setImporte(e.target.value)}
+          onFocus={(e) => e.target.select()}
+          style={{ width: 90 }}
+        />
+      </td>
+      <td>
+        <div style={{ display: 'flex', gap: 8 }}>
+          <button className="btn btn-secondary" onClick={guardar} disabled={guardando}>Guardar</button>
+          <button className="btn btn-danger" onClick={eliminar}>Eliminar</button>
+        </div>
+        {error && <Alert>{error}</Alert>}
+      </td>
+    </tr>
+  );
+}
+
 function FormularioPago({ alumnoId, onGuardado, onCancelar }) {
   const [planes, setPlanes] = useState([]);
   const [form, setForm] = useState({ plan_id: '', importe: '', fecha: hoyISO() });
+  const [esExcepcion, setEsExcepcion] = useState(false);
+  const [fechaVencimiento, setFechaVencimiento] = useState('');
+  const [clasesUsadas, setClasesUsadas] = useState('0');
   const [error, setError] = useState('');
   const [guardando, setGuardando] = useState(false);
 
@@ -230,6 +337,19 @@ function FormularioPago({ alumnoId, onGuardado, onCancelar }) {
     setForm((f) => ({ ...f, plan_id: planId, importe: plan ? plan.precio : f.importe }));
   }
 
+  function toggleExcepcion(activar) {
+    setEsExcepcion(activar);
+    if (activar && !fechaVencimiento) {
+      // Solo un punto de partida sugerido (mismo día, un mes después) — el entrenador
+      // lo puede pisar con el vencimiento real que traía el alumno.
+      const [y, m, d] = form.fecha.split('-').map(Number);
+      const targetMonthIndex = m; // 0-based next month (mismo truco que addCalendarMonth en db.cjs)
+      const ultimoDia = new Date(y, targetMonthIndex + 1, 0).getDate();
+      const sugerido = new Date(y, targetMonthIndex, Math.min(d, ultimoDia));
+      setFechaVencimiento(sugerido.toISOString().slice(0, 10));
+    }
+  }
+
   async function guardar(e) {
     e.preventDefault();
     setError('');
@@ -241,12 +361,18 @@ function FormularioPago({ alumnoId, onGuardado, onCancelar }) {
       setError('El plan seleccionado no tiene un precio configurado. Poné un precio para ese plan en la pantalla Planes antes de registrar el pago.');
       return;
     }
+    if (esExcepcion && !fechaVencimiento) {
+      setError('Ingresá la fecha de vencimiento real de este alumno.');
+      return;
+    }
     setGuardando(true);
     const res = await window.api.pagos.registrar({
       alumno_id: alumnoId,
       plan_id: Number(form.plan_id),
       importe: Number(form.importe) || 0,
       fecha: form.fecha,
+      fecha_vencimiento: esExcepcion ? fechaVencimiento : undefined,
+      clases_usadas: esExcepcion ? Number(clasesUsadas) || 0 : undefined,
     });
     setGuardando(false);
     if (!res.ok) {
@@ -275,10 +401,34 @@ function FormularioPago({ alumnoId, onGuardado, onCancelar }) {
           <input type="number" value={form.importe} disabled />
         </div>
         <div className="field">
-          <label>Fecha de inicio</label>
+          <label>Fecha de inicio {esExcepcion ? '(fecha real de pago)' : ''}</label>
           <input type="date" value={form.fecha} onChange={(e) => setForm({ ...form, fecha: e.target.value })} />
         </div>
       </div>
+
+      <label style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 16, fontSize: 14 }}>
+        <input type="checkbox" checked={esExcepcion} onChange={(e) => toggleExcepcion(e.target.checked)} />
+        Es un alumno que ya venía pagando antes de usar el sistema (cargar como excepción)
+      </label>
+
+      {esExcepcion && (
+        <div className="form-grid single" style={{ marginTop: 10 }}>
+          <div className="field">
+            <label>Vencimiento real de esta membresía</label>
+            <input type="date" value={fechaVencimiento} onChange={(e) => setFechaVencimiento(e.target.value)} />
+          </div>
+          <div className="field">
+            <label>Clases que ya usó en este período</label>
+            <input
+              type="number"
+              min="0"
+              value={clasesUsadas}
+              onChange={(e) => setClasesUsadas(e.target.value.replace(/[^0-9]/g, ''))}
+            />
+          </div>
+        </div>
+      )}
+
       <div className="form-actions">
         <button className="btn" type="submit" disabled={guardando}>Registrar pago y crear membresía</button>
         <button type="button" className="btn btn-secondary" onClick={onCancelar}>Cancelar</button>

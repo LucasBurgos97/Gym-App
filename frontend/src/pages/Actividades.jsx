@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import Alert from '../components/Alert.jsx';
+import { formatBloque } from '../utils/horario.js';
 
 const DIAS = [
   { value: 'lunes', label: 'Lun' },
@@ -10,6 +11,9 @@ const DIAS = [
   { value: 'sabado', label: 'Sáb' },
   { value: 'domingo', label: 'Dom' },
 ];
+
+// Cada horario es solo la hora de inicio del bloque de 1 hora (sin minutos): "16" = 16 a 17hs.
+const HORAS_DISPONIBLES = Array.from({ length: 18 }, (_, i) => String(i + 6)); // 6 a 23hs
 
 // Mapa "dia|horario" -> nombre de la actividad que ya lo ocupa.
 // Las actividades personalizadas no bloquean ni son bloqueadas (pueden superponerse).
@@ -91,7 +95,7 @@ function SelectorHorarios({ horarios, diasActuales, ocupados, exento, onCambiar 
         }
       }
     }
-    onCambiar([...horarios, horaNueva].sort());
+    onCambiar([...horarios, horaNueva].sort((a, b) => Number(a) - Number(b)));
     setHoraNueva('');
   }
 
@@ -105,14 +109,19 @@ function SelectorHorarios({ horarios, diasActuales, ocupados, exento, onCambiar 
         {horarios.length === 0 && <span className="muted" style={{ fontSize: 13 }}>Sin horarios agregados.</span>}
         {horarios.map((h) => (
           <span key={h} className="horario-chip">
-            {h}
-            <button type="button" onClick={() => quitar(h)} aria-label={`Quitar ${h}`}>×</button>
+            {formatBloque(h)}
+            <button type="button" onClick={() => quitar(h)} aria-label={`Quitar bloque ${formatBloque(h)}`}>×</button>
           </span>
         ))}
       </div>
       {conflicto && <p style={{ color: 'var(--danger)', fontSize: 13, margin: '0 0 8px' }}>{conflicto}</p>}
       <div className="horarios-add">
-        <input type="time" value={horaNueva} onChange={(e) => setHoraNueva(e.target.value)} />
+        <select value={horaNueva} onChange={(e) => setHoraNueva(e.target.value)}>
+          <option value="">Elegí un horario...</option>
+          {HORAS_DISPONIBLES.map((h) => (
+            <option key={h} value={h}>{formatBloque(h)}</option>
+          ))}
+        </select>
         <button type="button" className="btn btn-secondary" onClick={agregar}>+ Agregar horario</button>
       </div>
     </div>

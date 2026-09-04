@@ -1,5 +1,6 @@
-const { app, BrowserWindow, ipcMain } = require('electron');
+const { app, BrowserWindow, ipcMain, dialog } = require('electron');
 const path = require('path');
+const fs = require('fs');
 const db = require('./db.cjs');
 
 const isDev = !app.isPackaged;
@@ -31,9 +32,12 @@ function registerHandlers() {
   ipcMain.handle('actividades:eliminar', wrap((id) => db.eliminarActividad(id)));
 
   ipcMain.handle('pagos:registrar', wrap((datos) => db.registrarPago(datos)));
+  ipcMain.handle('pagos:actualizarImporte', wrap((id, importe) => db.actualizarImportePago(id, importe)));
+  ipcMain.handle('pagos:eliminar', wrap((id) => db.eliminarPago(id)));
 
   ipcMain.handle('asistencias:estado', wrap((dni) => db.estadoParaAsistencia(dni)));
   ipcMain.handle('asistencias:registrar', wrap((dni, actividad_id, horario) => db.registrarAsistencia(dni, actividad_id, horario)));
+  ipcMain.handle('asistencias:eliminar', wrap((id) => db.eliminarAsistencia(id)));
 
   ipcMain.handle('recuperaciones:registrar', wrap((datos) => db.registrarRecuperacion(datos)));
 
@@ -45,6 +49,20 @@ function registerHandlers() {
   ipcMain.handle('calendario:diasConAsistencias', wrap((anio, mes) => db.diasConAsistenciasEnMes(anio, mes)));
 
   ipcMain.handle('reportes:ingresos', wrap((tipo, referencia) => db.reporteIngresos(tipo, referencia)));
+
+  ipcMain.handle('respaldo:crear', wrap(async () => {
+    const win = BrowserWindow.getFocusedWindow();
+    const fecha = new Date().toISOString().slice(0, 10);
+    const result = await dialog.showSaveDialog(win, {
+      title: 'Guardar copia de seguridad',
+      defaultPath: `gym-backup-${fecha}.sqlite`,
+      filters: [{ name: 'Base de datos', extensions: ['sqlite'] }],
+    });
+    if (result.canceled || !result.filePath) return { cancelado: true };
+    const origen = db.guardarAhora();
+    fs.copyFileSync(origen, result.filePath);
+    return { cancelado: false, ruta: result.filePath };
+  }));
 }
 
 async function createWindow() {
@@ -57,6 +75,7 @@ async function createWindow() {
     minWidth: 900,
     minHeight: 600,
     autoHideMenuBar: true,
+    icon: path.join(__dirname, '..', 'src', 'assets', 'logo.png'),
     webPreferences: {
       preload: path.join(__dirname, 'preload.cjs'),
       contextIsolation: true,

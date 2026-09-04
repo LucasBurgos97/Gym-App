@@ -1,13 +1,15 @@
 import React, { useState } from 'react';
 import Alert from './Alert.jsx';
 
+const SOLO_DIGITOS = /[^0-9]/g;
+const SOLO_LETRAS = /[^A-Za-zÀ-ÿ\s'-]/g;
+
 export default function AlumnoForm({ initial, dniInicial, onGuardado, onCancelar }) {
   const [form, setForm] = useState({
     dni: initial?.dni ?? dniInicial ?? '',
     nombre: initial?.nombre ?? '',
     apellido: initial?.apellido ?? '',
     telefono: initial?.telefono ?? '',
-    email: initial?.email ?? '',
   });
   const [error, setError] = useState('');
   const [guardando, setGuardando] = useState(false);
@@ -42,26 +44,35 @@ export default function AlumnoForm({ initial, dniInicial, onGuardado, onCancelar
           <input
             value={form.dni}
             disabled={!!initial}
-            onChange={(e) => set('dni', e.target.value)}
+            onChange={(e) => set('dni', e.target.value.replace(SOLO_DIGITOS, '').slice(0, 8))}
+            inputMode="numeric"
             required
           />
         </div>
         <div className="field" />
         <div className="field">
           <label>Nombre</label>
-          <input value={form.nombre} onChange={(e) => set('nombre', e.target.value)} required />
+          <input
+            value={form.nombre}
+            onChange={(e) => set('nombre', e.target.value.replace(SOLO_LETRAS, ''))}
+            required
+          />
         </div>
         <div className="field">
           <label>Apellido</label>
-          <input value={form.apellido} onChange={(e) => set('apellido', e.target.value)} required />
+          <input
+            value={form.apellido}
+            onChange={(e) => set('apellido', e.target.value.replace(SOLO_LETRAS, ''))}
+            required
+          />
         </div>
         <div className="field">
-          <label>Teléfono</label>
-          <input value={form.telefono} onChange={(e) => set('telefono', e.target.value)} />
-        </div>
-        <div className="field">
-          <label>Email</label>
-          <input type="email" value={form.email} onChange={(e) => set('email', e.target.value)} />
+          <label>Teléfono (opcional)</label>
+          <input
+            value={form.telefono}
+            onChange={(e) => set('telefono', e.target.value.replace(SOLO_DIGITOS, '').slice(0, 15))}
+            inputMode="numeric"
+          />
         </div>
       </div>
       <div className="form-actions">
