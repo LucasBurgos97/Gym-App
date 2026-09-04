@@ -46,8 +46,15 @@
       { "from": "../database/schema.sql", "to": "database/schema.sql" }
     ],
     "win": {
-      "target": ["dir"],
+      "target": ["nsis", "dir"],
       "icon": "src/assets/perroteam.ico"
+    },
+    "nsis": {
+      "oneClick": true,
+      "perMachine": false,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "artifactName": "${productName} Setup ${version}.${ext}"
     }
   }
 }
