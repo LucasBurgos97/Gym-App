@@ -3,6 +3,7 @@ import Modal from '../components/Modal.jsx';
 import Alert from '../components/Alert.jsx';
 import AlumnoForm from '../components/AlumnoForm.jsx';
 import Carnet from '../components/Carnet.jsx';
+import useConfirm from '../components/useConfirm.jsx';
 import { formatBloque } from '../utils/horario.js';
 
 function hoyISO() {
@@ -17,6 +18,8 @@ export default function AlumnoDetalle({ alumnoId, onVolver }) {
   const [mostrarRecuperacion, setMostrarRecuperacion] = useState(false);
   const [mostrarHistorialRecuperaciones, setMostrarHistorialRecuperaciones] = useState(false);
   const [mostrarCarnet, setMostrarCarnet] = useState(false);
+  const [errorAsistencia, setErrorAsistencia] = useState('');
+  const [confirmar, dialogoConfirmar] = useConfirm();
 
   async function cargar() {
     setCargando(true);
@@ -35,17 +38,18 @@ export default function AlumnoDetalle({ alumnoId, onVolver }) {
   const membresiaActual = membresias.find((m) => m.estado === 'activa');
 
   async function eliminarAsistencia(id) {
-    if (!window.confirm('¿Deshacer esta asistencia? Le devuelve la clase a la membresía.')) return;
+    setErrorAsistencia('');
+    if (!(await confirmar('¿Deshacer esta asistencia? Le devuelve la clase a la membresía.'))) return;
     const res = await window.api.asistencias.eliminar(id);
     if (!res.ok) {
-      window.alert(res.error);
+      setErrorAsistencia(res.error);
       return;
     }
     cargar();
   }
 
   async function eliminarAlumno() {
-    const confirmado = window.confirm(
+    const confirmado = await confirmar(
       `¿Eliminar a ${alumno.nombre} ${alumno.apellido}? Se borra junto con todo su historial de pagos, membresías y asistencias. Esta acción no se puede deshacer.`
     );
     if (!confirmado) return;
@@ -133,6 +137,7 @@ export default function AlumnoDetalle({ alumnoId, onVolver }) {
 
       <div className="section-title">Historial de asistencias</div>
       <div className="card">
+        {errorAsistencia && <Alert>{errorAsistencia}</Alert>}
         {asistencias.length === 0 ? (
           <div className="empty-state">Sin asistencias registradas.</div>
         ) : (
@@ -182,7 +187,7 @@ export default function AlumnoDetalle({ alumnoId, onVolver }) {
               </thead>
               <tbody>
                 {pagos.map((p) => (
-                  <FilaPago key={p.id} pago={p} onCambio={cargar} />
+                  <FilaPago key={p.id} pago={p} onCambio={cargar} confirmar={confirmar} />
                 ))}
               </tbody>
             </table>
@@ -258,11 +263,12 @@ export default function AlumnoDetalle({ alumnoId, onVolver }) {
           />
         </Modal>
       )}
+      {dialogoConfirmar}
     </div>
   );
 }
 
-function FilaPago({ pago, onCambio }) {
+function FilaPago({ pago, onCambio, confirmar }) {
   const [importe, setImporte] = useState(pago.importe);
   const [error, setError] = useState('');
   const [guardando, setGuardando] = useState(false);
@@ -280,7 +286,7 @@ function FilaPago({ pago, onCambio }) {
   }
 
   async function eliminar() {
-    if (!window.confirm('¿Eliminar este pago y la membresía que generó? Solo se puede si todavía no tiene asistencias ni recuperaciones.')) return;
+    if (!(await confirmar('¿Eliminar este pago y la membresía que generó? Solo se puede si todavía no tiene asistencias ni recuperaciones.'))) return;
     const res = await window.api.pagos.eliminar(pago.id);
     if (!res.ok) {
       setError(res.error);

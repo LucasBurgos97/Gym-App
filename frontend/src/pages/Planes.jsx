@@ -1,7 +1,8 @@
 import React, { useEffect, useState } from 'react';
 import Alert from '../components/Alert.jsx';
+import useConfirm from '../components/useConfirm.jsx';
 
-function FilaPlan({ plan, onGuardado, onEliminado }) {
+function FilaPlan({ plan, onGuardado, onEliminado, confirmar }) {
   const [nombre, setNombre] = useState(plan.nombre);
   const [clasesIncluidas, setClasesIncluidas] = useState(plan.clases_incluidas ?? '');
   const [precio, setPrecio] = useState(plan.precio);
@@ -27,7 +28,7 @@ function FilaPlan({ plan, onGuardado, onEliminado }) {
   }
 
   async function eliminar() {
-    if (!window.confirm(`¿Eliminar el plan "${plan.nombre}"?`)) return;
+    if (!(await confirmar(`¿Eliminar el plan "${plan.nombre}"?`))) return;
     const res = await window.api.planes.eliminar(plan.id);
     if (!res.ok) {
       setError(res.error);
@@ -88,6 +89,7 @@ export default function Planes() {
   const [planes, setPlanes] = useState([]);
   const [error, setError] = useState('');
   const [nuevo, setNuevo] = useState({ nombre: '', clases_incluidas: '', precio: '' });
+  const [confirmar, dialogoConfirmar] = useConfirm();
 
   async function cargar() {
     const res = await window.api.planes.listar(false);
@@ -141,7 +143,7 @@ export default function Planes() {
             </thead>
             <tbody>
               {planes.map((p) => (
-                <FilaPlan key={p.id} plan={p} onGuardado={cargar} onEliminado={cargar} />
+                <FilaPlan key={p.id} plan={p} onGuardado={cargar} onEliminado={cargar} confirmar={confirmar} />
               ))}
             </tbody>
           </table>
@@ -185,6 +187,7 @@ export default function Planes() {
           </div>
         </form>
       </div>
+      {dialogoConfirmar}
     </div>
   );
 }

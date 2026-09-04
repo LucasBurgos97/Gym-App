@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import Alert from '../components/Alert.jsx';
+import useConfirm from '../components/useConfirm.jsx';
 import { formatBloque } from '../utils/horario.js';
 
 const DIAS = [
@@ -128,7 +129,7 @@ function SelectorHorarios({ horarios, diasActuales, ocupados, exento, onCambiar 
   );
 }
 
-function FilaActividad({ actividad, ocupados, onGuardado, onEliminado }) {
+function FilaActividad({ actividad, ocupados, onGuardado, onEliminado, confirmar }) {
   const [nombre, setNombre] = useState(actividad.nombre);
   const [dias, setDias] = useState(actividad.dias);
   const [horarios, setHorarios] = useState(actividad.horarios);
@@ -149,9 +150,14 @@ function FilaActividad({ actividad, ocupados, onGuardado, onEliminado }) {
   }
 
   async function eliminar() {
-    if (!window.confirm(`¿Eliminar la actividad "${actividad.nombre}"? No afecta las asistencias ya registradas.`)) return;
+    setError('');
+    if (!(await confirmar(`¿Eliminar la actividad "${actividad.nombre}"? No afecta las asistencias ya registradas.`))) return;
     const res = await window.api.actividades.eliminar(actividad.id);
-    if (res.ok) onEliminado();
+    if (!res.ok) {
+      setError(res.error);
+      return;
+    }
+    onEliminado();
   }
 
   return (
@@ -185,6 +191,7 @@ export default function Actividades() {
   const [actividades, setActividades] = useState([]);
   const [error, setError] = useState('');
   const [nueva, setNueva] = useState({ nombre: '', dias: [], horarios: [], personalizada: false });
+  const [confirmar, dialogoConfirmar] = useConfirm();
 
   async function cargar() {
     const res = await window.api.actividades.listar(false);
@@ -241,6 +248,7 @@ export default function Actividades() {
             ocupados={construirOcupados(actividades, a.id)}
             onGuardado={cargar}
             onEliminado={cargar}
+            confirmar={confirmar}
           />
         ))
       )}
@@ -286,6 +294,7 @@ export default function Actividades() {
           </div>
         </form>
       </div>
+      {dialogoConfirmar}
     </div>
   );
 }
