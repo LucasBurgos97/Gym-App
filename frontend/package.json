@@ -9,7 +9,8 @@
     "dev:vite": "vite",
     "dev:electron": "wait-on tcp:5173 && cross-env NODE_ENV=development electron .",
     "dev": "concurrently -k \"npm:dev:vite\" \"npm:dev:electron\"",
-    "build": "vite build"
+    "build": "vite build",
+    "dist": "vite build && electron-builder --win --publish=never"
   },
   "dependencies": {
     "qrcode": "^1.5.4",
@@ -22,7 +23,31 @@
     "concurrently": "^9.1.2",
     "cross-env": "^7.0.3",
     "electron": "^33.2.1",
+    "electron-builder": "^26.15.3",
     "vite": "^6.0.5",
     "wait-on": "^8.0.1"
+  },
+  "build": {
+    "appId": "com.elperroteamclubfitness.gymmanager",
+    "productName": "El Perro Team Club Fitness",
+    "directories": {
+      "output": "release"
+    },
+    "files": [
+      "electron/**/*",
+      "dist/**/*",
+      "src/assets/**/*",
+      "package.json"
+    ],
+    "asarUnpack": [
+      "node_modules/sql.js/dist/**"
+    ],
+    "extraResources": [
+      { "from": "../database/schema.sql", "to": "database/schema.sql" }
+    ],
+    "win": {
+      "target": ["dir"],
+      "icon": "src/assets/perroteam.ico"
+    }
   }
 }

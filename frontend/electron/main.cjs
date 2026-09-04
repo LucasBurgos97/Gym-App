@@ -75,7 +75,7 @@ async function createWindow() {
     minWidth: 900,
     minHeight: 600,
     autoHideMenuBar: true,
-    icon: path.join(__dirname, '..', 'src', 'assets', 'logo.png'),
+    icon: path.join(__dirname, '..', 'src', 'assets', 'perroteam.ico'),
     webPreferences: {
       preload: path.join(__dirname, 'preload.cjs'),
       contextIsolation: true,
