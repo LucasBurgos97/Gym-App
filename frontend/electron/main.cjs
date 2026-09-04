@@ -32,6 +32,8 @@ function registerHandlers() {
   ipcMain.handle('actividades:eliminar', wrap((id) => db.eliminarActividad(id)));
 
   ipcMain.handle('pagos:registrar', wrap((datos) => db.registrarPago(datos)));
+  ipcMain.handle('pagos:actualizarImporte', wrap((id, importe) => db.actualizarImportePago(id, importe)));
+  ipcMain.handle('pagos:eliminar', wrap((id) => db.eliminarPago(id)));
 
   ipcMain.handle('asistencias:estado', wrap((dni) => db.estadoParaAsistencia(dni)));
   ipcMain.handle('asistencias:registrar', wrap((dni, actividad_id, horario) => db.registrarAsistencia(dni, actividad_id, horario)));
@@ -73,6 +75,7 @@ async function createWindow() {
     minWidth: 900,
     minHeight: 600,
     autoHideMenuBar: true,
+    icon: path.join(__dirname, '..', 'src', 'assets', 'logo.png'),
     webPreferences: {
       preload: path.join(__dirname, 'preload.cjs'),
       contextIsolation: true,

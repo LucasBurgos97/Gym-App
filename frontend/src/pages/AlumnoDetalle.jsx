@@ -2,9 +2,17 @@ import React, { useEffect, useState } from 'react';
 import Modal from '../components/Modal.jsx';
 import Alert from '../components/Alert.jsx';
 import AlumnoForm from '../components/AlumnoForm.jsx';
+import Carnet from '../components/Carnet.jsx';
 
 function hoyISO() {
   return new Date().toISOString().slice(0, 10);
+}
+
+// El horario guardado es solo la hora de inicio del bloque de 1 hora (sin minutos).
+function formatBloque(hora) {
+  if (!hora) return '-';
+  const soloHora = hora.split(':')[0]; // por si quedó algún registro viejo con "HH:MM"
+  return `${soloHora} a ${Number(soloHora) + 1}hs`;
 }
 
 export default function AlumnoDetalle({ alumnoId, onVolver }) {
@@ -14,6 +22,7 @@ export default function AlumnoDetalle({ alumnoId, onVolver }) {
   const [mostrarPago, setMostrarPago] = useState(false);
   const [mostrarRecuperacion, setMostrarRecuperacion] = useState(false);
   const [mostrarHistorialRecuperaciones, setMostrarHistorialRecuperaciones] = useState(false);
+  const [mostrarCarnet, setMostrarCarnet] = useState(false);
 
   async function cargar() {
     setCargando(true);
@@ -57,7 +66,7 @@ export default function AlumnoDetalle({ alumnoId, onVolver }) {
           <div>
             <h2>{alumno.nombre} {alumno.apellido}</h2>
             <p className="muted">
-              DNI {alumno.dni} {alumno.telefono ? `· ${alumno.telefono}` : ''} {alumno.email ? `· ${alumno.email}` : ''}
+              DNI {alumno.dni} {alumno.telefono ? `· ${alumno.telefono}` : ''}
             </p>
             {membresiaActual ? (
               <span className="badge badge-activa">Membresía activa · {membresiaActual.plan_nombre}</span>
@@ -67,6 +76,7 @@ export default function AlumnoDetalle({ alumnoId, onVolver }) {
           </div>
           <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
             <button className="btn" onClick={() => setMostrarPago(true)}>Registrar pago</button>
+            <button className="btn btn-secondary" onClick={() => setMostrarCarnet(true)}>Carnet / QR</button>
             <button
               className="btn btn-secondary"
               disabled={!membresiaActual}
@@ -143,7 +153,7 @@ export default function AlumnoDetalle({ alumnoId, onVolver }) {
                   <tr key={a.id}>
                     <td>{a.fecha}</td>
                     <td>{a.actividad_nombre || '-'}</td>
-                    <td>{a.horario || '-'}</td>
+                    <td>{formatBloque(a.horario)}</td>
                     <td>
                       <button className="link-btn" onClick={() => eliminarAsistencia(a.id)}>
                         Deshacer
@@ -169,15 +179,12 @@ export default function AlumnoDetalle({ alumnoId, onVolver }) {
                   <th>Fecha</th>
                   <th>Plan</th>
                   <th>Importe</th>
+                  <th></th>
                 </tr>
               </thead>
               <tbody>
                 {pagos.map((p) => (
-                  <tr key={p.id}>
-                    <td>{p.fecha}</td>
-                    <td>{p.plan_nombre}</td>
-                    <td>${p.importe}</td>
-                  </tr>
+                  <FilaPago key={p.id} pago={p} onCambio={cargar} />
                 ))}
               </tbody>
             </table>
@@ -210,6 +217,8 @@ export default function AlumnoDetalle({ alumnoId, onVolver }) {
           />
         </Modal>
       )}
+
+      {mostrarCarnet && <Carnet alumno={alumno} onClose={() => setMostrarCarnet(false)} />}
 
       {mostrarHistorialRecuperaciones && (
         <Modal title="Clases recuperadas" onClose={() => setMostrarHistorialRecuperaciones(false)}>
@@ -252,6 +261,58 @@ export default function AlumnoDetalle({ alumnoId, onVolver }) {
         </Modal>
       )}
     </div>
+  );
+}
+
+function FilaPago({ pago, onCambio }) {
+  const [importe, setImporte] = useState(pago.importe);
+  const [error, setError] = useState('');
+  const [guardando, setGuardando] = useState(false);
+
+  async function guardar() {
+    setError('');
+    setGuardando(true);
+    const res = await window.api.pagos.actualizarImporte(pago.id, Number(importe));
+    setGuardando(false);
+    if (!res.ok) {
+      setError(res.error);
+      return;
+    }
+    onCambio();
+  }
+
+  async function eliminar() {
+    if (!window.confirm('¿Eliminar este pago y la membresía que generó? Solo se puede si todavía no tiene asistencias ni recuperaciones.')) return;
+    const res = await window.api.pagos.eliminar(pago.id);
+    if (!res.ok) {
+      setError(res.error);
+      return;
+    }
+    onCambio();
+  }
+
+  return (
+    <tr>
+      <td>{pago.fecha}</td>
+      <td>{pago.plan_nombre}</td>
+      <td>
+        $<input
+          className="table-input"
+          type="number"
+          value={importe}
+          onChange={(e) => setImporte(e.target.value)}
+          onFocus={(e) => e.target.select()}
+          style={{ width: 90 }}
+        />
+      </td>
+      <td>
+        <div style={{ display: 'flex', gap: 8 }}>
+          <button className="btn btn-secondary" onClick={guardar} disabled={guardando}>Guardar</button>
+          <button className="btn btn-danger" onClick={eliminar}>Eliminar</button>
+        </div>
+        {error && <Alert>{error}</Alert>}
+      </td>
+    </tr>
   );
 }
 

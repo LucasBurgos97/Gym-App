@@ -9,9 +9,13 @@ function diaDeHoy() {
   return DIAS_JS[new Date().getDay()];
 }
 
-function horaActualStr() {
-  const d = new Date();
-  return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
+// Cada horario es solo la hora de inicio del bloque de 1 hora (sin minutos): "16" = clase de 16 a 17hs.
+function horaActual() {
+  return String(new Date().getHours());
+}
+
+function formatBloque(hora) {
+  return `${hora} a ${Number(hora) + 1}hs`;
 }
 
 function construirOpciones(actividades) {
@@ -21,20 +25,26 @@ function construirOpciones(actividades) {
   actividades.forEach((act) => {
     const esHoy = act.dias.includes(hoy);
     act.horarios.forEach((h) => {
-      const opt = { value: `${act.id}|${h}`, actividad_id: act.id, horario: h, label: `${act.nombre} — ${h}` };
+      const opt = {
+        value: `${act.id}|${h}`,
+        actividad_id: act.id,
+        actividad_nombre: act.nombre,
+        horario: h,
+        label: `${act.nombre} — ${formatBloque(h)}`,
+      };
       (esHoy ? deHoy : otras).push(opt);
     });
   });
-  deHoy.sort((a, b) => a.horario.localeCompare(b.horario));
+  deHoy.sort((a, b) => Number(a.horario) - Number(b.horario));
   otras.sort((a, b) => a.label.localeCompare(b.label));
   return { deHoy, otras };
 }
 
-function elegirPorDefecto(deHoy) {
-  if (deHoy.length === 0) return '';
-  const ahora = horaActualStr();
-  const pasadas = deHoy.filter((o) => o.horario <= ahora);
-  return (pasadas[pasadas.length - 1] || deHoy[0]).value;
+// Actividad de hoy cuyo bloque horario incluye "ahora" — solo si hay una sola
+// coincidencia sin ambigüedad (dos personalizadas pueden compartir horario).
+function actividadDeAhora(deHoy) {
+  const coincidencias = deHoy.filter((o) => o.horario === horaActual());
+  return coincidencias.length === 1 ? coincidencias[0] : null;
 }
 
 export default function Asistencia({ onVerAlumno }) {
@@ -50,38 +60,12 @@ export default function Asistencia({ onVerAlumno }) {
 
   useEffect(() => {
     window.api.actividades.listar(true).then((res) => {
-      if (res.ok) {
-        setActividades(res.data);
-        const { deHoy } = construirOpciones(res.data);
-        setSeleccion(elegirPorDefecto(deHoy));
-      }
+      if (res.ok) setActividades(res.data);
     });
   }, []);
 
   const { deHoy, otras } = construirOpciones(actividades);
-
-  // Compartida por el flujo manual (botón "Registrar asistencia") y el automático
-  // (lector de código de barras/QR: escanea, tipea el DNI y manda Enter).
-  async function registrar(dniValor, seleccionValor) {
-    setError('');
-    const [actividadIdStr, horario] = seleccionValor.split('|');
-    const res = await window.api.asistencias.registrar(dniValor, Number(actividadIdStr), horario);
-    if (!res.ok) {
-      setError(res.error);
-      return false;
-    }
-    const actividadElegida = actividades.find((a) => a.id === Number(actividadIdStr));
-    setMensajeOk(
-      `Asistencia registrada para ${res.data.alumno.nombre} ${res.data.alumno.apellido}` +
-        (actividadElegida ? ` — ${actividadElegida.nombre} (${horario})` : '') +
-        '.'
-    );
-    setEstado(null);
-    setDni('');
-    setSeleccion(elegirPorDefecto(deHoy));
-    inputRef.current?.focus();
-    return true;
-  }
+  const actividadActual = actividadDeAhora(deHoy);
 
   async function buscar(e) {
     e?.preventDefault();
@@ -97,24 +81,30 @@ export default function Asistencia({ onVerAlumno }) {
       setEstado(null);
       return;
     }
-
-    const data = res.data;
-    const autoSeleccion = elegirPorDefecto(deHoy);
-
-    // Con todo en orden (alumno, membresía vigente, clases disponibles y una
-    // actividad de hoy sin ambigüedad), registra directo — pensado para que un
-    // lector USB de QR/código de barras deje la asistencia lista con un solo escaneo.
-    if (data.encontrado && data.membresiaVigente && data.puedeAsistir && autoSeleccion) {
-      const ok = await registrar(dniLimpio, autoSeleccion);
-      if (ok) return;
-    }
-
-    setEstado(data);
-    setSeleccion(autoSeleccion);
+    setEstado(res.data);
+    // Si hay una única clase corriendo ahora mismo, la dejamos pre-seleccionada
+    // para que el profesor solo tenga que confirmar — nunca se registra sola.
+    setSeleccion(actividadActual ? actividadActual.value : '');
   }
 
-  function confirmarAsistencia() {
-    registrar(dni.trim(), seleccion);
+  async function confirmarAsistencia() {
+    setError('');
+    const [actividadIdStr, horario] = seleccion.split('|');
+    const res = await window.api.asistencias.registrar(dni.trim(), Number(actividadIdStr), horario);
+    if (!res.ok) {
+      setError(res.error);
+      return;
+    }
+    const actividadElegida = actividades.find((a) => a.id === Number(actividadIdStr));
+    setMensajeOk(
+      `Asistencia registrada para ${res.data.alumno.nombre} ${res.data.alumno.apellido}` +
+        (actividadElegida ? ` — ${actividadElegida.nombre} (${formatBloque(horario)})` : '') +
+        '.'
+    );
+    setEstado(null);
+    setDni('');
+    setSeleccion('');
+    inputRef.current?.focus();
   }
 
   function alumnoCreado(alumno) {
@@ -190,8 +180,17 @@ export default function Asistencia({ onVerAlumno }) {
               )}
 
               {estado.membresiaVigente && estado.puedeAsistir && (
-                <div className="field" style={{ maxWidth: 320, marginTop: 16 }}>
-                  <label>Actividad de hoy</label>
+                <div className="field" style={{ maxWidth: 340, marginTop: 16 }}>
+                  {actividadActual ? (
+                    <p style={{ margin: '0 0 8px', fontWeight: 600 }}>
+                      ¿Viene a {actividadActual.actividad_nombre} ({formatBloque(actividadActual.horario)})?
+                    </p>
+                  ) : (
+                    <p className="muted" style={{ margin: '0 0 8px', fontSize: 13.5 }}>
+                      No hay una clase corriendo justo ahora — elegí a cuál viene.
+                    </p>
+                  )}
+                  <label>Actividad</label>
                   <select value={seleccion} onChange={(e) => setSeleccion(e.target.value)}>
                     <option value="">Seleccioná una actividad...</option>
                     {deHoy.length > 0 && (
@@ -218,7 +217,7 @@ export default function Asistencia({ onVerAlumno }) {
                 disabled={!estado.puedeAsistir || !seleccion}
                 onClick={confirmarAsistencia}
               >
-                Registrar asistencia
+                {actividadActual ? 'Sí, registrar asistencia' : 'Registrar asistencia'}
               </button>
               <button className="btn btn-secondary" onClick={() => onVerAlumno(estado.alumno.id)}>
                 Ver ficha del alumno

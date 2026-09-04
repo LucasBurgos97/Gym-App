@@ -94,6 +94,20 @@ async function init(userDataDir) {
     db.run("UPDATE actividades SET personalizada = 1 WHERE nombre = 'Entrenamiento Personalizado'");
   }
 
+  // Migración: los horarios pasan a ser solo la hora del bloque (sin minutos), ej.
+  // "16:00" -> "16" representa la clase de 16 a 17hs. Es idempotente: si ya no
+  // tienen ":00" no los toca.
+  for (const act of all('SELECT id, horarios FROM actividades')) {
+    const normalizado = act.horarios
+      .split(',')
+      .map((h) => h.trim().replace(/^0?(\d{1,2}):00$/, '$1'))
+      .join(',');
+    if (normalizado !== act.horarios) {
+      run('UPDATE actividades SET horarios = ? WHERE id = ?', [normalizado, act.id]);
+    }
+  }
+  run("UPDATE asistencias SET horario = REPLACE(horario, ':00', '') WHERE horario LIKE '%:00'");
+
   const planCount = get('SELECT COUNT(*) AS c FROM planes').c;
   if (planCount === 0) {
     run('INSERT INTO planes (nombre, clases_incluidas, precio, activo) VALUES (?, ?, ?, 1)', ['3 veces por semana', 12, 0]);
@@ -104,16 +118,16 @@ async function init(userDataDir) {
   const actividadCount = get('SELECT COUNT(*) AS c FROM actividades').c;
   if (actividadCount === 0) {
     run('INSERT INTO actividades (nombre, dias, horarios, activo) VALUES (?, ?, ?, 1)', [
-      'Full Training', 'lunes,miercoles,viernes', '10:00,18:00,19:00,20:00,21:00',
+      'Full Training', 'lunes,miercoles,viernes', '10,18,19,20,21',
     ]);
     run('INSERT INTO actividades (nombre, dias, horarios, activo) VALUES (?, ?, ?, 1)', [
-      'Funcional para Adultos', 'martes,jueves', '18:00',
+      'Funcional para Adultos', 'martes,jueves', '18',
     ]);
     run('INSERT INTO actividades (nombre, dias, horarios, activo, personalizada) VALUES (?, ?, ?, 1, 1)', [
-      'Entrenamiento Personalizado', 'lunes,miercoles,viernes', '08:00,09:00,16:00,17:00',
+      'Entrenamiento Personalizado', 'lunes,miercoles,viernes', '8,9,16,17',
     ]);
     run('INSERT INTO actividades (nombre, dias, horarios, activo) VALUES (?, ?, ?, 1)', [
-      'Full Training al Aire Libre', 'martes,jueves', '19:00,21:00',
+      'Full Training al Aire Libre', 'martes,jueves', '19,21',
     ]);
   }
 
@@ -122,25 +136,24 @@ async function init(userDataDir) {
 
 // ---------- Alumnos ----------
 
-function crearAlumno({ dni, nombre, apellido, telefono, email }) {
+function crearAlumno({ dni, nombre, apellido, telefono }) {
   dni = String(dni).trim();
   if (!dni) throw new Error('El DNI es obligatorio.');
   if (!nombre || !apellido) throw new Error('Nombre y apellido son obligatorios.');
   const existente = get('SELECT id FROM alumnos WHERE dni = ?', [dni]);
   if (existente) throw new Error('Ya existe un alumno registrado con ese DNI.');
   const id = run(
-    'INSERT INTO alumnos (dni, nombre, apellido, telefono, email) VALUES (?, ?, ?, ?, ?)',
-    [dni, nombre, apellido, telefono || null, email || null]
+    'INSERT INTO alumnos (dni, nombre, apellido, telefono) VALUES (?, ?, ?, ?)',
+    [dni, nombre, apellido, telefono || null]
   );
   return get('SELECT * FROM alumnos WHERE id = ?', [id]);
 }
 
-function actualizarAlumno(id, { nombre, apellido, telefono, email }) {
-  run('UPDATE alumnos SET nombre = ?, apellido = ?, telefono = ?, email = ? WHERE id = ?', [
+function actualizarAlumno(id, { nombre, apellido, telefono }) {
+  run('UPDATE alumnos SET nombre = ?, apellido = ?, telefono = ? WHERE id = ?', [
     nombre,
     apellido,
     telefono || null,
-    email || null,
     id,
   ]);
   return get('SELECT * FROM alumnos WHERE id = ?', [id]);
@@ -395,6 +408,42 @@ function registrarPago({ alumno_id, plan_id, importe, fecha, fecha_vencimiento, 
   }
 
   return get('SELECT * FROM membresias WHERE id = ?', [membresiaId]);
+}
+
+// Corrige un importe mal tipeado. No toca fechas ni clases: para eso hay que
+// eliminar el pago (si todavía se puede) y cargarlo de nuevo.
+function actualizarImportePago(id, importe) {
+  const pago = get('SELECT * FROM pagos WHERE id = ?', [id]);
+  if (!pago) throw new Error('Pago no encontrado.');
+  if (!importe || Number(importe) <= 0) throw new Error('El importe debe ser mayor a 0.');
+  run('UPDATE pagos SET importe = ? WHERE id = ?', [Number(importe), id]);
+  return get('SELECT * FROM pagos WHERE id = ?', [id]);
+}
+
+// Deshace un pago cargado por error (alumno equivocado, doble clic, etc.).
+// Solo se permite si la membresía que generó todavía no tiene asistencias ni
+// recuperaciones registradas — si ya se usó, borrar el pago borraría historial real.
+function eliminarPago(id) {
+  const pago = get('SELECT * FROM pagos WHERE id = ?', [id]);
+  if (!pago) throw new Error('Pago no encontrado.');
+
+  const membresia = get('SELECT * FROM membresias WHERE pago_id = ?', [id]);
+  if (membresia) {
+    const enUso = get(
+      'SELECT (SELECT COUNT(*) FROM asistencias WHERE membresia_id = ?) + (SELECT COUNT(*) FROM recuperaciones WHERE membresia_id = ?) AS c',
+      [membresia.id, membresia.id]
+    ).c;
+    if (enUso > 0) {
+      throw new Error('Esta membresía ya tiene asistencias o recuperaciones registradas y no se puede eliminar. Si el importe está mal, corregilo en su lugar.');
+    }
+    // Si esta membresía había recibido clases recuperadas trasladadas de la anterior,
+    // que esa recuperación vuelva a quedar "sin trasladar" en vez de apuntar a un id borrado.
+    run('UPDATE recuperaciones SET trasladada_a_membresia_id = NULL WHERE trasladada_a_membresia_id = ?', [membresia.id]);
+    run('DELETE FROM membresias WHERE id = ?', [membresia.id]);
+  }
+
+  run('DELETE FROM pagos WHERE id = ?', [id]);
+  return { eliminado: true };
 }
 
 // ---------- Asistencias ----------
@@ -661,6 +710,8 @@ module.exports = {
   actualizarActividad,
   eliminarActividad,
   registrarPago,
+  actualizarImportePago,
+  eliminarPago,
   registrarAsistencia,
   eliminarAsistencia,
   estadoParaAsistencia,

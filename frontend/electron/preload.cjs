@@ -27,6 +27,8 @@ contextBridge.exposeInMainWorld('api', {
   },
   pagos: {
     registrar: invoke('pagos:registrar'),
+    actualizarImporte: invoke('pagos:actualizarImporte'),
+    eliminar: invoke('pagos:eliminar'),
   },
   asistencias: {
     estadoParaAsistencia: invoke('asistencias:estado'),
