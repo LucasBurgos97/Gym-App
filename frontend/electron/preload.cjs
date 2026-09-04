@@ -38,6 +38,9 @@ contextBridge.exposeInMainWorld('api', {
   recuperaciones: {
     registrar: invoke('recuperaciones:registrar'),
   },
+  carnet: {
+    abrirImpresion: invoke('carnet:abrirImpresion'),
+  },
   historial: {
     deAlumno: invoke('historial:deAlumno'),
   },

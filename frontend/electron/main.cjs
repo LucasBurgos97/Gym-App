@@ -1,4 +1,4 @@
-const { app, BrowserWindow, ipcMain, dialog } = require('electron');
+const { app, BrowserWindow, ipcMain, dialog, shell } = require('electron');
 const path = require('path');
 const fs = require('fs');
 const db = require('./db.cjs');
@@ -49,6 +49,16 @@ function registerHandlers() {
   ipcMain.handle('calendario:diasConAsistencias', wrap((anio, mes) => db.diasConAsistenciasEnMes(anio, mes)));
 
   ipcMain.handle('reportes:ingresos', wrap((tipo, referencia) => db.reporteIngresos(tipo, referencia)));
+
+  // Abre una página HTML standalone (con el QR ya embebido) en el navegador
+  // del sistema, para que el usuario use su propio diálogo de impresión —
+  // con vista previa y control de escala/tamaño — en vez del que ofrece Electron.
+  ipcMain.handle('carnet:abrirImpresion', wrap(async (html, nombreArchivo) => {
+    const filePath = path.join(app.getPath('temp'), nombreArchivo);
+    fs.writeFileSync(filePath, html, 'utf-8');
+    await shell.openPath(filePath);
+    return { ruta: filePath };
+  }));
 
   ipcMain.handle('respaldo:crear', wrap(async () => {
     const win = BrowserWindow.getFocusedWindow();

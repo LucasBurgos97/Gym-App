@@ -494,23 +494,6 @@ tr:hover td { background: #fafbfc; }
   margin: 0;
 }
 
-@media print {
-  body * {
-    visibility: hidden;
-  }
-  .carnet-imprimible,
-  .carnet-imprimible * {
-    visibility: visible;
-  }
-  .carnet-imprimible {
-    position: absolute;
-    top: 40px;
-    left: 50%;
-    transform: translateX(-50%);
-    border: none;
-  }
-}
-
 .calendario-layout {
   display: flex;
   gap: 20px;
