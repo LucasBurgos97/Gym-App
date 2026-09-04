@@ -2,6 +2,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import Alert from '../components/Alert.jsx';
 import Modal from '../components/Modal.jsx';
 import AlumnoForm from '../components/AlumnoForm.jsx';
+import { formatBloque } from '../utils/horario.js';
 
 const DIAS_JS = ['domingo', 'lunes', 'martes', 'miercoles', 'jueves', 'viernes', 'sabado'];
 
@@ -12,10 +13,6 @@ function diaDeHoy() {
 // Cada horario es solo la hora de inicio del bloque de 1 hora (sin minutos): "16" = clase de 16 a 17hs.
 function horaActual() {
   return String(new Date().getHours());
-}
-
-function formatBloque(hora) {
-  return `${hora} a ${Number(hora) + 1}hs`;
 }
 
 function construirOpciones(actividades) {

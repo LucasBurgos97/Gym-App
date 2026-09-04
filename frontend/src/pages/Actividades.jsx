@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import Alert from '../components/Alert.jsx';
+import { formatBloque } from '../utils/horario.js';
 
 const DIAS = [
   { value: 'lunes', label: 'Lun' },
@@ -13,10 +14,6 @@ const DIAS = [
 
 // Cada horario es solo la hora de inicio del bloque de 1 hora (sin minutos): "16" = 16 a 17hs.
 const HORAS_DISPONIBLES = Array.from({ length: 18 }, (_, i) => String(i + 6)); // 6 a 23hs
-
-function formatBloque(hora) {
-  return `${hora} a ${Number(hora) + 1}hs`;
-}
 
 // Mapa "dia|horario" -> nombre de la actividad que ya lo ocupa.
 // Las actividades personalizadas no bloquean ni son bloqueadas (pueden superponerse).

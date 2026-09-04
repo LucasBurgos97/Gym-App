@@ -3,16 +3,10 @@ import Modal from '../components/Modal.jsx';
 import Alert from '../components/Alert.jsx';
 import AlumnoForm from '../components/AlumnoForm.jsx';
 import Carnet from '../components/Carnet.jsx';
+import { formatBloque } from '../utils/horario.js';
 
 function hoyISO() {
   return new Date().toISOString().slice(0, 10);
-}
-
-// El horario guardado es solo la hora de inicio del bloque de 1 hora (sin minutos).
-function formatBloque(hora) {
-  if (!hora) return '-';
-  const soloHora = hora.split(':')[0]; // por si quedó algún registro viejo con "HH:MM"
-  return `${soloHora} a ${Number(soloHora) + 1}hs`;
 }
 
 export default function AlumnoDetalle({ alumnoId, onVolver }) {
