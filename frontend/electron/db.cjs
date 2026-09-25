@@ -104,6 +104,33 @@ function run(sql, params = []) {
   return id;
 }
 
+// Cronograma definitivo del gimnasio. Cada fila es "estos días x estos horarios", por
+// eso una misma actividad aparece dos veces cuando los horarios difieren entre
+// lunes/miércoles/viernes y martes/jueves.
+const CRONOGRAMA_INICIAL = [
+  ['Entrenamiento Personalizado', 'lunes,miercoles,viernes', '8,17,20', 1, 'rojo'],
+  ['Entrenamiento Personalizado', 'martes,jueves', '17,21', 1, 'rojo'],
+  ['Funcional Hard', 'lunes,miercoles,viernes', '9,16,18,19,21', 0, 'negro'],
+  ['Funcional Hard', 'martes,jueves', '18,19', 0, 'negro'],
+  ['Entrenamiento Híbrido', 'martes,jueves', '20', 0, 'gris'],
+];
+
+// Los 4 horarios de ejemplo con los que arrancaban las versiones anteriores (por nombre).
+const CRONOGRAMA_DE_EJEMPLO_ANTERIOR = JSON.stringify([
+  ['Entrenamiento Personalizado', 'lunes,miercoles,viernes', '8,9,16,17', 1],
+  ['Full Training', 'lunes,miercoles,viernes', '10,18,19,20,21', 0],
+  ['Full Training al Aire Libre', 'martes,jueves', '19,21', 0],
+  ['Funcional para Adultos', 'martes,jueves', '18', 0],
+]);
+
+function cargarCronogramaInicial() {
+  for (const [nombre, dias, horarios, personalizada, color] of CRONOGRAMA_INICIAL) {
+    run('INSERT INTO actividades (nombre, dias, horarios, activo, personalizada, color) VALUES (?, ?, ?, 1, ?, ?)', [
+      nombre, dias, horarios, personalizada, color,
+    ]);
+  }
+}
+
 async function init(userDataDir) {
   SQL = await initSqlJs();
   dbFilePath = path.join(userDataDir, 'gym.sqlite');
@@ -200,6 +227,23 @@ async function init(userDataDir) {
     });
   }
 
+  // v4: pasa al cronograma definitivo a las bases que todavía tienen EXACTAMENTE los 4
+  // horarios de ejemplo de las versiones anteriores. Si alguien los modificó o agregó
+  // otros, no se toca nada. Los viejos no se borran: quedan archivados (activo = 0) para
+  // que las asistencias ya registradas sigan mostrando el nombre de su actividad.
+  if (get('PRAGMA user_version').user_version < 4) {
+    const actuales = all('SELECT nombre, dias, horarios, personalizada FROM actividades WHERE activo = 1 ORDER BY nombre')
+      .map((a) => [a.nombre, a.dias, a.horarios, a.personalizada]);
+    const sinTocar = JSON.stringify(actuales) === CRONOGRAMA_DE_EJEMPLO_ANTERIOR;
+    transaction(() => {
+      if (sinTocar) {
+        db.run('UPDATE actividades SET activo = 0 WHERE activo = 1');
+        cargarCronogramaInicial();
+      }
+      db.run('PRAGMA user_version = 4');
+    });
+  }
+
   const planCount = get('SELECT COUNT(*) AS c FROM planes').c;
   if (planCount === 0) {
     run('INSERT INTO planes (nombre, clases_incluidas, precio, activo) VALUES (?, ?, ?, 1)', ['3 veces por semana', 12, 0]);
@@ -209,23 +253,7 @@ async function init(userDataDir) {
 
   const actividadCount = get('SELECT COUNT(*) AS c FROM actividades').c;
   if (actividadCount === 0) {
-    // Cronograma definitivo del gimnasio. Cada fila es "estos días x estos horarios",
-    // por eso una misma actividad aparece dos veces cuando los horarios difieren
-    // entre lunes/miércoles/viernes y martes/jueves.
-    const cronogramaInicial = [
-      ['Entrenamiento Personalizado', 'lunes,miercoles,viernes', '8,17,20', 1, 'rojo'],
-      ['Entrenamiento Personalizado', 'martes,jueves', '17,21', 1, 'rojo'],
-      ['Funcional Hard', 'lunes,miercoles,viernes', '9,16,18,19,21', 0, 'negro'],
-      ['Funcional Hard', 'martes,jueves', '18,19', 0, 'negro'],
-      ['Entrenamiento Híbrido', 'martes,jueves', '20', 0, 'gris'],
-    ];
-    transaction(() => {
-      for (const [nombre, dias, horarios, personalizada, color] of cronogramaInicial) {
-        run('INSERT INTO actividades (nombre, dias, horarios, activo, personalizada, color) VALUES (?, ?, ?, 1, ?, ?)', [
-          nombre, dias, horarios, personalizada, color,
-        ]);
-      }
-    });
+    transaction(cargarCronogramaInicial);
   }
 
   persist();
@@ -362,7 +390,7 @@ function listaATexto(valor) {
 // salvo que alguna de ellas sea "personalizada" (entrenamientos 1 a 1, se pueden superponer).
 function validarConflictoHorario({ dias, horarios, personalizada, idAExcluir }) {
   if (personalizada) return;
-  const otras = all('SELECT * FROM actividades WHERE personalizada = 0').map(parseActividad);
+  const otras = all('SELECT * FROM actividades WHERE personalizada = 0 AND activo = 1').map(parseActividad);
   for (const otra of otras) {
     if (idAExcluir && otra.id === idAExcluir) continue;
     for (const d of dias) {

@@ -238,7 +238,7 @@ export default function Actividades() {
   const [confirmar, dialogoConfirmar] = useConfirm();
 
   async function cargar() {
-    const res = await window.api.actividades.listar(false);
+    const res = await window.api.actividades.listar(true); // las archivadas no se muestran
     if (res.ok) setActividades(res.data);
   }
 
