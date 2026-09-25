@@ -33,8 +33,12 @@ function construirOpciones(actividades) {
     });
   });
   deHoy.sort((a, b) => Number(a.horario) - Number(b.horario));
-  otras.sort((a, b) => a.label.localeCompare(b.label));
-  return { deHoy, otras };
+  // Una misma clase puede estar cargada dos veces (una por cada grupo de días). Si ya aparece
+  // en "Programadas para hoy", o repetida, no se vuelve a ofrecer en "Otras actividades".
+  const vistas = new Set(deHoy.map((o) => o.label));
+  const otrasUnicas = otras.filter((o) => !vistas.has(o.label) && vistas.add(o.label));
+  otrasUnicas.sort((a, b) => a.label.localeCompare(b.label));
+  return { deHoy, otras: otrasUnicas };
 }
 
 // Actividad de hoy cuyo bloque horario incluye "ahora" — solo si hay una sola

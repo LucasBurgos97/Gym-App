@@ -186,6 +186,20 @@ async function init(userDataDir) {
     });
   }
 
+  // v3: cada actividad guarda su color para el cronograma (así no depende del nombre).
+  // Las personalizadas pasan a rojo y las 'híbrido' a gris; el resto queda en negro.
+  if (get('PRAGMA user_version').user_version < 3) {
+    const columnas = all('PRAGMA table_info(actividades)').map((c) => c.name);
+    transaction(() => {
+      if (!columnas.includes('color')) {
+        db.run("ALTER TABLE actividades ADD COLUMN color TEXT NOT NULL DEFAULT 'negro'");
+        db.run("UPDATE actividades SET color = 'rojo' WHERE personalizada = 1");
+        db.run("UPDATE actividades SET color = 'gris' WHERE personalizada = 0 AND lower(nombre) LIKE '%brido%'");
+      }
+      db.run('PRAGMA user_version = 3');
+    });
+  }
+
   const planCount = get('SELECT COUNT(*) AS c FROM planes').c;
   if (planCount === 0) {
     run('INSERT INTO planes (nombre, clases_incluidas, precio, activo) VALUES (?, ?, ?, 1)', ['3 veces por semana', 12, 0]);
@@ -195,18 +209,23 @@ async function init(userDataDir) {
 
   const actividadCount = get('SELECT COUNT(*) AS c FROM actividades').c;
   if (actividadCount === 0) {
-    run('INSERT INTO actividades (nombre, dias, horarios, activo) VALUES (?, ?, ?, 1)', [
-      'Full Training', 'lunes,miercoles,viernes', '10,18,19,20,21',
-    ]);
-    run('INSERT INTO actividades (nombre, dias, horarios, activo) VALUES (?, ?, ?, 1)', [
-      'Funcional para Adultos', 'martes,jueves', '18',
-    ]);
-    run('INSERT INTO actividades (nombre, dias, horarios, activo, personalizada) VALUES (?, ?, ?, 1, 1)', [
-      'Entrenamiento Personalizado', 'lunes,miercoles,viernes', '8,9,16,17',
-    ]);
-    run('INSERT INTO actividades (nombre, dias, horarios, activo) VALUES (?, ?, ?, 1)', [
-      'Full Training al Aire Libre', 'martes,jueves', '19,21',
-    ]);
+    // Cronograma definitivo del gimnasio. Cada fila es "estos días x estos horarios",
+    // por eso una misma actividad aparece dos veces cuando los horarios difieren
+    // entre lunes/miércoles/viernes y martes/jueves.
+    const cronogramaInicial = [
+      ['Entrenamiento Personalizado', 'lunes,miercoles,viernes', '8,17,20', 1, 'rojo'],
+      ['Entrenamiento Personalizado', 'martes,jueves', '17,21', 1, 'rojo'],
+      ['Funcional Hard', 'lunes,miercoles,viernes', '9,16,18,19,21', 0, 'negro'],
+      ['Funcional Hard', 'martes,jueves', '18,19', 0, 'negro'],
+      ['Entrenamiento Híbrido', 'martes,jueves', '20', 0, 'gris'],
+    ];
+    transaction(() => {
+      for (const [nombre, dias, horarios, personalizada, color] of cronogramaInicial) {
+        run('INSERT INTO actividades (nombre, dias, horarios, activo, personalizada, color) VALUES (?, ?, ?, 1, ?, ?)', [
+          nombre, dias, horarios, personalizada, color,
+        ]);
+      }
+    });
   }
 
   persist();
@@ -361,30 +380,52 @@ function listarActividades(soloActivas = false) {
   return all(`SELECT * FROM actividades ${soloActivas ? 'WHERE activo = 1' : ''} ORDER BY id`).map(parseActividad);
 }
 
-function crearActividad({ nombre, dias, horarios, personalizada }) {
+const COLORES_ACTIVIDAD = ['rojo', 'negro', 'gris'];
+
+function validarColor(color) {
+  if (!COLORES_ACTIVIDAD.includes(color)) throw new Error('El color de la actividad no es válido.');
+  return color;
+}
+
+// Cada horario es solo la hora de inicio del bloque (0 a 23).
+function validarHorarios(horarios) {
+  for (const h of horarios) {
+    if (!/^\d{1,2}$/.test(String(h)) || Number(h) > 23) {
+      throw new Error('Los horarios deben ser una hora entre 0 y 23.');
+    }
+  }
+}
+
+function crearActividad({ nombre, dias, horarios, personalizada, color }) {
   if (!nombre) throw new Error('El nombre de la actividad es obligatorio.');
   const diasArr = Array.isArray(dias) ? dias : [];
   const horariosArr = Array.isArray(horarios) ? horarios : [];
+  validarHorarios(horariosArr);
   validarConflictoHorario({ dias: diasArr, horarios: horariosArr, personalizada: !!personalizada });
-  const id = run('INSERT INTO actividades (nombre, dias, horarios, activo, personalizada) VALUES (?, ?, ?, 1, ?)', [
+  const id = run('INSERT INTO actividades (nombre, dias, horarios, activo, personalizada, color) VALUES (?, ?, ?, 1, ?, ?)', [
     nombre,
     listaATexto(dias),
     listaATexto(horarios),
     personalizada ? 1 : 0,
+    validarColor(color || 'negro'),
   ]);
   return parseActividad(get('SELECT * FROM actividades WHERE id = ?', [id]));
 }
 
-function actualizarActividad(id, { nombre, dias, horarios, activo, personalizada }) {
+function actualizarActividad(id, { nombre, dias, horarios, activo, personalizada, color }) {
   const diasArr = Array.isArray(dias) ? dias : [];
   const horariosArr = Array.isArray(horarios) ? horarios : [];
+  validarHorarios(horariosArr);
   validarConflictoHorario({ dias: diasArr, horarios: horariosArr, personalizada: !!personalizada, idAExcluir: id });
-  run('UPDATE actividades SET nombre = ?, dias = ?, horarios = ?, activo = ?, personalizada = ? WHERE id = ?', [
+  const actual = get('SELECT color FROM actividades WHERE id = ?', [id]);
+  if (!actual) throw new Error('Actividad no encontrada.');
+  run('UPDATE actividades SET nombre = ?, dias = ?, horarios = ?, activo = ?, personalizada = ?, color = ? WHERE id = ?', [
     nombre,
     listaATexto(dias),
     listaATexto(horarios),
     activo ? 1 : 0,
     personalizada ? 1 : 0,
+    validarColor(color || actual.color),
     id,
   ]);
   return parseActividad(get('SELECT * FROM actividades WHERE id = ?', [id]));

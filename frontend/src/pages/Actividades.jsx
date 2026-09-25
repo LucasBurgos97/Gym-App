@@ -3,6 +3,8 @@ import Alert from '../components/Alert.jsx';
 import useConfirm from '../components/useConfirm.jsx';
 import CronogramaSemanal from '../components/CronogramaSemanal.jsx';
 import { formatBloque } from '../utils/horario.js';
+import { COLORES_ACTIVIDAD } from '../utils/coloresActividad.js';
+import { SOLO_DIGITOS, SOLO_LETRAS_Y_NUMEROS } from '../utils/filtros.js';
 
 const DIAS = [
   { value: 'lunes', label: 'Lun' },
@@ -13,9 +15,6 @@ const DIAS = [
   { value: 'sabado', label: 'Sáb' },
   { value: 'domingo', label: 'Dom' },
 ];
-
-// Cada horario es solo la hora de inicio del bloque de 1 hora (sin minutos): "16" = 16 a 17hs.
-const HORAS_DISPONIBLES = Array.from({ length: 18 }, (_, i) => String(i + 6)); // 6 a 23hs
 
 // Mapa "dia|horario" -> nombre de la actividad que ya lo ocupa.
 // Las actividades personalizadas no bloquean ni son bloqueadas (pueden superponerse).
@@ -81,23 +80,34 @@ function SelectorHorarios({ horarios, diasActuales, ocupados, exento, onCambiar 
   const [horaNueva, setHoraNueva] = useState('');
   const [conflicto, setConflicto] = useState('');
 
+  // Cada horario es solo la hora de inicio del bloque de 1 hora (sin minutos): "16" = 16 a 17hs.
+  const horaValida = horaNueva !== '' && Number(horaNueva) <= 23;
+
   function agregar() {
     setConflicto('');
-    if (!horaNueva) return;
-    if (horarios.includes(horaNueva)) {
+    if (horaNueva === '') {
+      setConflicto('Escribí una hora (un número de 0 a 23).');
+      return;
+    }
+    if (!horaValida) {
+      setConflicto('La hora tiene que estar entre 0 y 23.');
+      return;
+    }
+    const hora = String(Number(horaNueva)); // "08" -> "8"
+    if (horarios.includes(hora)) {
       setHoraNueva('');
       return;
     }
     if (!exento) {
       for (const d of diasActuales) {
-        const nombre = ocupados.get(`${d}|${horaNueva}`);
+        const nombre = ocupados.get(`${d}|${hora}`);
         if (nombre) {
           setConflicto(`Ese horario ya lo usa "${nombre}" el día ${d}.`);
           return;
         }
       }
     }
-    onCambiar([...horarios, horaNueva].sort((a, b) => Number(a) - Number(b)));
+    onCambiar([...horarios, hora].sort((a, b) => Number(a) - Number(b)));
     setHoraNueva('');
   }
 
@@ -118,14 +128,44 @@ function SelectorHorarios({ horarios, diasActuales, ocupados, exento, onCambiar 
       </div>
       {conflicto && <p style={{ color: 'var(--danger)', fontSize: 13, margin: '0 0 8px' }}>{conflicto}</p>}
       <div className="horarios-add">
-        <select value={horaNueva} onChange={(e) => setHoraNueva(e.target.value)}>
-          <option value="">Elegí un horario...</option>
-          {HORAS_DISPONIBLES.map((h) => (
-            <option key={h} value={h}>{formatBloque(h)}</option>
-          ))}
-        </select>
+        <input
+          inputMode="numeric"
+          placeholder="Hora (0 a 23)"
+          value={horaNueva}
+          onChange={(e) => setHoraNueva(e.target.value.replace(SOLO_DIGITOS, '').slice(0, 2))}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter') {
+              e.preventDefault(); // dentro del formulario de "Nueva actividad" no debe enviarlo
+              agregar();
+            }
+          }}
+        />
         <button type="button" className="btn btn-secondary" onClick={agregar}>+ Agregar horario</button>
       </div>
+      {horaValida && (
+        <p className="muted" style={{ margin: '6px 0 0', fontSize: 13 }}>
+          Es la clase de {formatBloque(String(Number(horaNueva)))}
+        </p>
+      )}
+    </div>
+  );
+}
+
+function SelectorColor({ color, onCambiar }) {
+  return (
+    <div className="colores-selector">
+      {COLORES_ACTIVIDAD.map((c) => (
+        <button
+          key={c.value}
+          type="button"
+          className={'color-chip' + (color === c.value ? ' color-chip-activo' : '')}
+          onClick={() => onCambiar(c.value)}
+          aria-pressed={color === c.value}
+        >
+          <span className="color-muestra" style={{ background: c.muestra }} />
+          {c.label}
+        </button>
+      ))}
     </div>
   );
 }
@@ -135,13 +175,14 @@ function FilaActividad({ actividad, ocupados, onGuardado, onEliminado, confirmar
   const [dias, setDias] = useState(actividad.dias);
   const [horarios, setHorarios] = useState(actividad.horarios);
   const [personalizada, setPersonalizada] = useState(actividad.personalizada);
+  const [color, setColor] = useState(actividad.color || 'negro');
   const [guardando, setGuardando] = useState(false);
   const [error, setError] = useState('');
 
   async function guardar() {
     setError('');
     setGuardando(true);
-    const res = await window.api.actividades.actualizar(actividad.id, { nombre, dias, horarios, activo: 1, personalizada });
+    const res = await window.api.actividades.actualizar(actividad.id, { nombre, dias, horarios, activo: 1, personalizada, color });
     setGuardando(false);
     if (!res.ok) {
       setError(res.error);
@@ -166,7 +207,7 @@ function FilaActividad({ actividad, ocupados, onGuardado, onEliminado, confirmar
       <Alert>{error}</Alert>
       <div className="field">
         <label>Nombre</label>
-        <input value={nombre} onChange={(e) => setNombre(e.target.value)} />
+        <input value={nombre} onChange={(e) => setNombre(e.target.value.replace(SOLO_LETRAS_Y_NUMEROS, ''))} />
         <label style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 10, fontWeight: 400 }}>
           <input type="checkbox" checked={personalizada} onChange={(e) => setPersonalizada(e.target.checked)} />
           Es personalizada (permite superponer día y horario con otras)
@@ -175,6 +216,8 @@ function FilaActividad({ actividad, ocupados, onGuardado, onEliminado, confirmar
       <div className="field">
         <label>Días</label>
         <SelectorDias diasSeleccionados={dias} horariosActuales={horarios} ocupados={ocupados} exento={personalizada} onCambiar={setDias} />
+        <label style={{ marginTop: 12 }}>Color en el cronograma</label>
+        <SelectorColor color={color} onCambiar={setColor} />
       </div>
       <div className="field">
         <label>Horarios</label>
@@ -191,7 +234,7 @@ function FilaActividad({ actividad, ocupados, onGuardado, onEliminado, confirmar
 export default function Actividades() {
   const [actividades, setActividades] = useState([]);
   const [error, setError] = useState('');
-  const [nueva, setNueva] = useState({ nombre: '', dias: [], horarios: [], personalizada: false });
+  const [nueva, setNueva] = useState({ nombre: '', dias: [], horarios: [], personalizada: false, color: 'negro' });
   const [confirmar, dialogoConfirmar] = useConfirm();
 
   async function cargar() {
@@ -223,7 +266,7 @@ export default function Actividades() {
       setError(res.error);
       return;
     }
-    setNueva({ nombre: '', dias: [], horarios: [], personalizada: false });
+    setNueva({ nombre: '', dias: [], horarios: [], personalizada: false, color: 'negro' });
     cargar();
   }
 
@@ -263,7 +306,10 @@ export default function Actividades() {
         <form onSubmit={crear}>
           <div className="field" style={{ maxWidth: 420, marginBottom: 14 }}>
             <label>Nombre</label>
-            <input value={nueva.nombre} onChange={(e) => setNueva({ ...nueva, nombre: e.target.value })} />
+            <input
+              value={nueva.nombre}
+              onChange={(e) => setNueva({ ...nueva, nombre: e.target.value.replace(SOLO_LETRAS_Y_NUMEROS, '') })}
+            />
             <label style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 10, fontWeight: 400 }}>
               <input
                 type="checkbox"
@@ -282,6 +328,8 @@ export default function Actividades() {
               exento={nueva.personalizada}
               onCambiar={(dias) => setNueva({ ...nueva, dias })}
             />
+            <label style={{ marginTop: 12 }}>Color en el cronograma</label>
+            <SelectorColor color={nueva.color} onCambiar={(color) => setNueva({ ...nueva, color })} />
           </div>
           <div className="field" style={{ marginBottom: 14 }}>
             <label>Horarios</label>

@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import Alert from '../components/Alert.jsx';
 import useConfirm from '../components/useConfirm.jsx';
+import { SOLO_LETRAS_Y_NUMEROS } from '../utils/filtros.js';
 
 function FilaPlan({ plan, onGuardado, onEliminado, confirmar }) {
   const [nombre, setNombre] = useState(plan.nombre);
@@ -43,9 +44,9 @@ function FilaPlan({ plan, onGuardado, onEliminado, confirmar }) {
         <input
           className="table-input"
           value={nombre}
-          onChange={(e) => setNombre(e.target.value)}
+          onChange={(e) => setNombre(e.target.value.replace(SOLO_LETRAS_Y_NUMEROS, ''))}
           onFocus={(e) => e.target.select()}
-          style={{ width: 170 }}
+          style={{ width: 150 }}
         />
       </td>
       <td>
@@ -55,7 +56,7 @@ function FilaPlan({ plan, onGuardado, onEliminado, confirmar }) {
           placeholder="Ilimitado"
           onChange={(e) => setClasesIncluidas(e.target.value.replace(/[^0-9]/g, ''))}
           onFocus={(e) => e.target.select()}
-          style={{ width: 80 }}
+          style={{ width: 72 }}
         />
       </td>
       <td>
@@ -65,7 +66,7 @@ function FilaPlan({ plan, onGuardado, onEliminado, confirmar }) {
           value={precio}
           onChange={(e) => setPrecio(e.target.value)}
           onFocus={(e) => e.target.select()}
-          style={{ width: 90 }}
+          style={{ width: 80 }}
         />
       </td>
       <td>
@@ -74,8 +75,8 @@ function FilaPlan({ plan, onGuardado, onEliminado, confirmar }) {
           {activo ? 'Activo' : 'Inactivo'}
         </label>
       </td>
-      <td>
-        <div style={{ display: 'flex', gap: 8 }}>
+      <td style={{ whiteSpace: 'normal' }}>
+        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
           <button className="btn btn-secondary" onClick={guardar} disabled={guardando}>Guardar</button>
           <button className="btn btn-danger" onClick={eliminar}>Eliminar</button>
         </div>
@@ -161,7 +162,7 @@ export default function Planes() {
             <label>Nombre</label>
             <input
               value={nuevo.nombre}
-              onChange={(e) => setNuevo({ ...nuevo, nombre: e.target.value })}
+              onChange={(e) => setNuevo({ ...nuevo, nombre: e.target.value.replace(SOLO_LETRAS_Y_NUMEROS, '') })}
               onFocus={(e) => e.target.select()}
             />
           </div>

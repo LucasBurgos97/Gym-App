@@ -11,6 +11,7 @@ import Backup from './pages/Backup.jsx';
 import Reloj from './components/Reloj.jsx';
 import ErrorBoundary from './components/ErrorBoundary.jsx';
 import logoUrl from './assets/logo.png';
+import fondoUrl from './assets/fondo-gimnasio.jpg';
 
 const NAV_ITEMS = [
   { key: 'asistencia', label: 'Asistencia', icon: '✓' },
@@ -61,7 +62,7 @@ export default function App() {
       </nav>
       <main className="main-area">
         <div className="watermark" aria-hidden="true">
-          <img src={logoUrl} alt="" />
+          <img src={fondoUrl} alt="" />
         </div>
         <div className="main-content">
           <ErrorBoundary key={view}>

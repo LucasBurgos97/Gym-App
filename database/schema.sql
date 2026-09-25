@@ -50,7 +50,8 @@ CREATE TABLE IF NOT EXISTS actividades (
   dias           TEXT NOT NULL,   -- días separados por coma, ej: "lunes,miercoles,viernes"
   horarios       TEXT NOT NULL,   -- horas separadas por coma, ej: "10:00,18:00,19:00"
   activo         INTEGER NOT NULL DEFAULT 1,
-  personalizada  INTEGER NOT NULL DEFAULT 0  -- si es 1, no aplica la exclusividad de día+horario con otras actividades
+  personalizada  INTEGER NOT NULL DEFAULT 0, -- si es 1, no aplica la exclusividad de día+horario con otras actividades
+  color          TEXT NOT NULL DEFAULT 'negro'  -- color en el cronograma: rojo, negro o gris
 );
 
 CREATE TABLE IF NOT EXISTS asistencias (

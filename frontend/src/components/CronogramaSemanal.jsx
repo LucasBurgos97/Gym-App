@@ -19,7 +19,6 @@ export default function CronogramaSemanal({ actividades }) {
   const dias = DIAS.filter((d, i) => i < 5 || diasConClases.has(d.value));
   const horas = [...new Set(actividades.flatMap((a) => a.horarios))].sort((a, b) => Number(a) - Number(b));
   const hoy = DIAS_JS[new Date().getDay()];
-  const hayPersonalizadas = actividades.some((a) => a.personalizada);
 
   if (horas.length === 0) {
     return (
@@ -36,7 +35,7 @@ export default function CronogramaSemanal({ actividades }) {
   }
 
   return (
-    <div className="card">
+    <div className="card cronograma-card">
       <div className="table-wrap">
         <table className="cronograma">
           <thead>
@@ -56,7 +55,7 @@ export default function CronogramaSemanal({ actividades }) {
                     {clasesDe(d.value, hora).map((a) => (
                       <div
                         key={a.id}
-                        className={'cronograma-clase' + (a.personalizada ? ' cronograma-clase-personalizada' : '')}
+                        className={'cronograma-clase cronograma-clase-' + (a.color || 'negro')}
                         title={a.nombre}
                       >
                         {a.nombre}
@@ -69,11 +68,9 @@ export default function CronogramaSemanal({ actividades }) {
           </tbody>
         </table>
       </div>
-      {hayPersonalizadas && (
-        <p className="muted" style={{ margin: '12px 0 0', fontSize: 13 }}>
-          Las actividades en gris son personalizadas: pueden compartir día y horario con otras.
-        </p>
-      )}
+      <p className="muted" style={{ margin: '12px 0 0', fontSize: 13 }}>
+        El color de cada actividad se elige al editarla, más abajo.
+      </p>
     </div>
   );
 }
