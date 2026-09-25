@@ -5,7 +5,7 @@ import AlumnoForm from '../components/AlumnoForm.jsx';
 import Carnet from '../components/Carnet.jsx';
 import useConfirm from '../components/useConfirm.jsx';
 import { formatBloque } from '../utils/horario.js';
-import { fechaLocalISO } from '../utils/fecha.js';
+import { fechaLocalISO, sumarUnMes } from '../utils/fecha.js';
 
 function hoyISO() {
   return fechaLocalISO();
@@ -325,10 +325,16 @@ function FormularioPago({ alumnoId, onGuardado, onCancelar }) {
   const [planes, setPlanes] = useState([]);
   const [form, setForm] = useState({ plan_id: '', importe: '', fecha: hoyISO() });
   const [esExcepcion, setEsExcepcion] = useState(false);
-  const [fechaVencimiento, setFechaVencimiento] = useState('');
+  // Vencimiento elegido a mano. Vacío = automático: un mes después de la fecha de inicio.
+  const [vencimientoManual, setVencimientoManual] = useState('');
   const [clasesUsadas, setClasesUsadas] = useState('0');
   const [error, setError] = useState('');
   const [guardando, setGuardando] = useState(false);
+
+  const hoy = hoyISO();
+  // Se recalcula siempre a partir de la fecha de inicio, así no queda un valor viejo
+  // si se cambia la fecha después de tildar la excepción.
+  const fechaVencimiento = vencimientoManual || sumarUnMes(form.fecha);
 
   useEffect(() => {
     window.api.planes.listar(true).then((res) => {
@@ -344,32 +350,27 @@ function FormularioPago({ alumnoId, onGuardado, onCancelar }) {
     setForm((f) => ({ ...f, plan_id: planId, importe: plan ? plan.precio : f.importe }));
   }
 
-  function toggleExcepcion(activar) {
-    setEsExcepcion(activar);
-    if (activar && !fechaVencimiento) {
-      // Solo un punto de partida sugerido (mismo día, un mes después) — el entrenador
-      // lo puede pisar con el vencimiento real que traía el alumno.
-      const [y, m, d] = form.fecha.split('-').map(Number);
-      const targetMonthIndex = m; // 0-based next month (mismo truco que addCalendarMonth en db.cjs)
-      const ultimoDia = new Date(y, targetMonthIndex + 1, 0).getDate();
-      const sugerido = new Date(y, targetMonthIndex, Math.min(d, ultimoDia));
-      setFechaVencimiento(fechaLocalISO(sugerido));
-    }
-  }
-
   async function guardar(e) {
     e.preventDefault();
     setError('');
+    if (!form.fecha) {
+      setError('Elegí la fecha de inicio.');
+      return;
+    }
+    if (form.fecha > hoy) {
+      setError('La fecha de inicio no puede ser posterior a hoy.');
+      return;
+    }
+    if (esExcepcion && fechaVencimiento < form.fecha) {
+      setError('El vencimiento no puede ser anterior a la fecha de inicio.');
+      return;
+    }
     if (!form.plan_id) {
       setError('Seleccioná un plan. Si no aparece ninguno, activalo primero en la pantalla Planes.');
       return;
     }
     if (!form.importe || Number(form.importe) <= 0) {
       setError('El plan seleccionado no tiene un precio configurado. Poné un precio para ese plan en la pantalla Planes antes de registrar el pago.');
-      return;
-    }
-    if (esExcepcion && !fechaVencimiento) {
-      setError('Ingresá la fecha de vencimiento real de este alumno.');
       return;
     }
     setGuardando(true);
@@ -409,12 +410,21 @@ function FormularioPago({ alumnoId, onGuardado, onCancelar }) {
         </div>
         <div className="field">
           <label>Fecha de inicio {esExcepcion ? '(fecha real de pago)' : ''}</label>
-          <input type="date" value={form.fecha} onChange={(e) => setForm({ ...form, fecha: e.target.value })} />
+          <input
+            type="date"
+            value={form.fecha}
+            max={hoy}
+            onChange={(e) => setForm({ ...form, fecha: e.target.value })}
+          />
+          <span className="muted" style={{ fontSize: 12.5 }}>
+            Vence el {fechaVencimiento ? fechaVencimiento.split('-').reverse().join('/') : '-'}
+            {vencimientoManual ? ' (elegido a mano)' : ' — un mes después de la fecha de inicio'}
+          </span>
         </div>
       </div>
 
       <label style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 16, fontSize: 14 }}>
-        <input type="checkbox" checked={esExcepcion} onChange={(e) => toggleExcepcion(e.target.checked)} />
+        <input type="checkbox" checked={esExcepcion} onChange={(e) => setEsExcepcion(e.target.checked)} />
         Es un alumno que ya venía pagando antes de usar el sistema (cargar como excepción)
       </label>
 
@@ -422,7 +432,12 @@ function FormularioPago({ alumnoId, onGuardado, onCancelar }) {
         <div className="form-grid single" style={{ marginTop: 10 }}>
           <div className="field">
             <label>Vencimiento real de esta membresía</label>
-            <input type="date" value={fechaVencimiento} onChange={(e) => setFechaVencimiento(e.target.value)} />
+            <input
+              type="date"
+              value={fechaVencimiento}
+              min={form.fecha}
+              onChange={(e) => setVencimientoManual(e.target.value)}
+            />
           </div>
           <div className="field">
             <label>Clases que ya usó en este período</label>

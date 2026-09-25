@@ -444,6 +444,9 @@ function registrarPago({ alumno_id, plan_id, importe, fecha, fecha_vencimiento, 
   }
 
   const fechaInicio = fecha || today();
+  if (fechaInicio > today()) {
+    throw new Error('La fecha de inicio no puede ser posterior a hoy.');
+  }
   // fecha_vencimiento: solo se usa para dar de alta alumnos que ya venían pagando
   // antes de usar el sistema (RN-03 igual aplica por defecto para pagos nuevos).
   const fechaVencimiento = fecha_vencimiento || addCalendarMonth(fechaInicio);

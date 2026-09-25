@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import Alert from '../components/Alert.jsx';
 import useConfirm from '../components/useConfirm.jsx';
+import CronogramaSemanal from '../components/CronogramaSemanal.jsx';
 import { formatBloque } from '../utils/horario.js';
 
 const DIAS = [
@@ -234,6 +235,9 @@ export default function Actividades() {
         <h1>Actividades</h1>
         <p>Cronograma de clases: qué actividad se dicta, qué días y a qué horario. Se usa al registrar asistencia.</p>
       </div>
+
+      <div className="section-title">Cronograma semanal</div>
+      <CronogramaSemanal actividades={actividades} />
 
       <div className="section-title">Actividades existentes</div>
       {actividades.length === 0 ? (

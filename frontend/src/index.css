@@ -672,6 +672,71 @@ tr:hover td { background: #fafbfc; }
   border-radius: 999px;
 }
 
+/* Cronograma semanal (arriba de Actividades) */
+.cronograma {
+  table-layout: fixed;
+  min-width: 680px;
+}
+
+.cronograma th,
+.cronograma td {
+  white-space: normal;
+  vertical-align: top;
+  text-align: center;
+  padding: 6px;
+  border: 1px solid var(--border);
+}
+
+.cronograma thead th {
+  background: var(--ink);
+  color: #fff;
+  font-size: 13px;
+  text-transform: none;
+  letter-spacing: 0;
+  padding: 10px 6px;
+}
+
+.cronograma thead th.cronograma-hoy { background: var(--primary); }
+
+.cronograma .cronograma-hora {
+  width: 100px;
+  text-align: left;
+  padding-left: 10px;
+  font-size: 13px;
+  text-transform: none;
+  letter-spacing: 0;
+  color: var(--text);
+  background: #f4f4f4;
+}
+
+.cronograma thead .cronograma-hora {
+  background: var(--ink);
+  color: #fff;
+}
+
+.cronograma tbody tr:hover td { background: #fafafa; }
+.cronograma td.cronograma-hoy,
+.cronograma tbody tr:hover td.cronograma-hoy { background: rgba(216, 25, 32, 0.06); }
+
+.cronograma-clase {
+  background: var(--primary-light);
+  border-left: 3px solid var(--primary);
+  color: var(--primary-dark);
+  border-radius: 6px;
+  padding: 5px 8px;
+  margin: 2px 0;
+  font-size: 13px;
+  font-weight: 600;
+  text-align: left;
+  overflow-wrap: anywhere;
+}
+
+.cronograma-clase-personalizada {
+  background: var(--muted-bg);
+  border-left-color: #6b6b6b;
+  color: var(--muted-text);
+}
+
 .actividad-card {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
