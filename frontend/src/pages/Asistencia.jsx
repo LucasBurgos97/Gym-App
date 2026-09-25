@@ -45,9 +45,11 @@ function actividadDeAhora(deHoy) {
 }
 
 export default function Asistencia({ onVerAlumno }) {
-  const [dni, setDni] = useState('');
+  const [dni, setDni] = useState(''); // lo que hay escrito en el campo (se vacía en cada búsqueda)
+  const [dniActivo, setDniActivo] = useState(''); // DNI del alumno que se está mostrando
   const [estado, setEstado] = useState(null); // resultado de estadoParaAsistencia
   const [buscando, setBuscando] = useState(false);
+  const [registrando, setRegistrando] = useState(false);
   const [error, setError] = useState('');
   const [mensajeOk, setMensajeOk] = useState('');
   const [mostrarAlta, setMostrarAlta] = useState(false);
@@ -71,8 +73,13 @@ export default function Asistencia({ onVerAlumno }) {
     setBuscando(true);
     setError('');
     setMensajeOk('');
+    // Se vacía el campo apenas se busca: si quedara el DNI anterior, el lector
+    // le pegaría el siguiente DNI al final y habría que borrarlo a mano.
+    setDni('');
+    setDniActivo(dniLimpio);
     const res = await window.api.asistencias.estadoParaAsistencia(dniLimpio);
     setBuscando(false);
+    inputRef.current?.focus();
     if (!res.ok) {
       setError(res.error);
       setEstado(null);
@@ -85,11 +92,15 @@ export default function Asistencia({ onVerAlumno }) {
   }
 
   async function confirmarAsistencia() {
+    if (registrando) return; // evita registrar dos veces con un doble clic
     setError('');
+    setRegistrando(true);
     const [actividadIdStr, horario] = seleccion.split('|');
-    const res = await window.api.asistencias.registrar(dni.trim(), Number(actividadIdStr), horario);
+    const res = await window.api.asistencias.registrar(dniActivo, Number(actividadIdStr), horario);
+    setRegistrando(false);
     if (!res.ok) {
       setError(res.error);
+      inputRef.current?.focus();
       return;
     }
     const actividadElegida = actividades.find((a) => a.id === Number(actividadIdStr));
@@ -99,7 +110,7 @@ export default function Asistencia({ onVerAlumno }) {
         '.'
     );
     setEstado(null);
-    setDni('');
+    setDniActivo('');
     setSeleccion('');
     inputRef.current?.focus();
   }
@@ -125,6 +136,7 @@ export default function Asistencia({ onVerAlumno }) {
             placeholder="Número de DNI"
             value={dni}
             onChange={(e) => setDni(e.target.value)}
+            onFocus={(e) => e.target.select()}
           />
           <button className="btn btn-lg" type="submit" disabled={buscando}>
             Buscar
@@ -136,7 +148,7 @@ export default function Asistencia({ onVerAlumno }) {
 
         {estado && !estado.encontrado && (
           <div className="alert alert-warning" style={{ marginTop: 18 }}>
-            No existe un alumno con DNI {dni}.{' '}
+            No existe un alumno con DNI {dniActivo}.{' '}
             <button className="link-btn" onClick={() => setMostrarAlta(true)}>
               Registrar alumno nuevo
             </button>
@@ -211,7 +223,7 @@ export default function Asistencia({ onVerAlumno }) {
             <div style={{ display: 'flex', flexDirection: 'column', gap: 10, minWidth: 190 }}>
               <button
                 className="btn btn-lg"
-                disabled={!estado.puedeAsistir || !seleccion}
+                disabled={!estado.puedeAsistir || !seleccion || registrando}
                 onClick={confirmarAsistencia}
               >
                 {actividadActual ? 'Sí, registrar asistencia' : 'Registrar asistencia'}
@@ -226,7 +238,7 @@ export default function Asistencia({ onVerAlumno }) {
 
       {mostrarAlta && (
         <Modal title="Registrar alumno nuevo" onClose={() => setMostrarAlta(false)}>
-          <AlumnoForm dniInicial={dni} onGuardado={alumnoCreado} onCancelar={() => setMostrarAlta(false)} />
+          <AlumnoForm dniInicial={dniActivo} onGuardado={alumnoCreado} onCancelar={() => setMostrarAlta(false)} />
         </Modal>
       )}
     </div>

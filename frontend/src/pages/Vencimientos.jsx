@@ -1,7 +1,8 @@
 import React, { useEffect, useState } from 'react';
+import { fechaLocalISO } from '../utils/fecha.js';
 
 function hoyISO() {
-  return new Date().toISOString().slice(0, 10);
+  return fechaLocalISO();
 }
 
 function diasRestantes(fechaVencimiento) {

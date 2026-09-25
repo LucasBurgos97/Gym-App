@@ -5,9 +5,10 @@ import AlumnoForm from '../components/AlumnoForm.jsx';
 import Carnet from '../components/Carnet.jsx';
 import useConfirm from '../components/useConfirm.jsx';
 import { formatBloque } from '../utils/horario.js';
+import { fechaLocalISO } from '../utils/fecha.js';
 
 function hoyISO() {
-  return new Date().toISOString().slice(0, 10);
+  return fechaLocalISO();
 }
 
 export default function AlumnoDetalle({ alumnoId, onVolver }) {
@@ -352,7 +353,7 @@ function FormularioPago({ alumnoId, onGuardado, onCancelar }) {
       const targetMonthIndex = m; // 0-based next month (mismo truco que addCalendarMonth en db.cjs)
       const ultimoDia = new Date(y, targetMonthIndex + 1, 0).getDate();
       const sugerido = new Date(y, targetMonthIndex, Math.min(d, ultimoDia));
-      setFechaVencimiento(sugerido.toISOString().slice(0, 10));
+      setFechaVencimiento(fechaLocalISO(sugerido));
     }
   }
 

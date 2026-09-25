@@ -10,8 +10,29 @@ let SQL = null;
 let db = null;
 let dbFilePath = null;
 
+function pad2(n) {
+  return String(n).padStart(2, '0');
+}
+
+// Fecha y hora LOCALES (no UTC). toISOString() devuelve UTC: en Argentina (UTC-3)
+// eso hace que desde las 21:00 la app crea que ya es "mañana" — justo en el
+// horario de las clases de la noche.
+function fechaLocal(d = new Date()) {
+  return `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`; // YYYY-MM-DD
+}
+
+function fechaHoraLocal(d = new Date()) {
+  return `${fechaLocal(d)} ${pad2(d.getHours())}:${pad2(d.getMinutes())}:${pad2(d.getSeconds())}`;
+}
+
+// "YYYY-MM-DD" -> Date a medianoche LOCAL (new Date('YYYY-MM-DD') la interpreta como UTC).
+function parseFechaLocal(str) {
+  const [y, m, d] = str.split('-').map(Number);
+  return new Date(y, m - 1, d);
+}
+
 function today() {
-  return new Date().toISOString().slice(0, 10); // YYYY-MM-DD
+  return fechaLocal();
 }
 
 // RN-03: la fecha de vencimiento conserva el día del mes de inicio, un mes calendario después.
@@ -22,7 +43,7 @@ function addCalendarMonth(dateStr) {
   const lastDayOfTargetMonth = new Date(y, targetMonthIndex + 1, 0).getDate();
   const day = Math.min(d, lastDayOfTargetMonth);
   const result = new Date(y, targetMonthIndex, day);
-  return result.toISOString().slice(0, 10);
+  return fechaLocal(result);
 }
 
 let deferirPersistencia = false;
@@ -139,6 +160,32 @@ async function init(userDataDir) {
     db.run(`PRAGMA user_version = ${VERSION_MIGRACIONES}`);
   }
 
+  // v2: antes las fechas de asistencias, altas y recuperaciones se guardaban en UTC
+  // (datetime('now')), así que las de 21:00 en adelante quedaban con la fecha de
+  // "mañana". Se pasan las ya guardadas a hora local. Se guarda una copia del
+  // archivo antes de tocarlo, y todo se aplica en una sola escritura (o nada).
+  if (get('PRAGMA user_version').user_version < 2) {
+    const utcALocal = (texto) => {
+      const m = /^(\d{4})-(\d{2})-(\d{2}) (\d{2}):(\d{2}):(\d{2})$/.exec(texto || '');
+      if (!m) return texto;
+      return fechaHoraLocal(new Date(Date.UTC(+m[1], +m[2] - 1, +m[3], +m[4], +m[5], +m[6])));
+    };
+    const cambios = [];
+    for (const [tabla, columna] of [['asistencias', 'fecha'], ['alumnos', 'fecha_registro'], ['recuperaciones', 'fecha_registro']]) {
+      for (const fila of all(`SELECT id, ${columna} AS valor FROM ${tabla}`)) {
+        const nuevo = utcALocal(fila.valor);
+        if (nuevo !== fila.valor) cambios.push([`UPDATE ${tabla} SET ${columna} = ? WHERE id = ?`, [nuevo, fila.id]]);
+      }
+    }
+    if (cambios.length > 0 && fs.existsSync(dbFilePath)) {
+      fs.copyFileSync(dbFilePath, path.join(path.dirname(dbFilePath), 'gym.antes-de-corregir-fechas.sqlite'));
+    }
+    transaction(() => {
+      for (const [sql, params] of cambios) run(sql, params);
+      db.run('PRAGMA user_version = 2');
+    });
+  }
+
   const planCount = get('SELECT COUNT(*) AS c FROM planes').c;
   if (planCount === 0) {
     run('INSERT INTO planes (nombre, clases_incluidas, precio, activo) VALUES (?, ?, ?, 1)', ['3 veces por semana', 12, 0]);
@@ -174,8 +221,8 @@ function crearAlumno({ dni, nombre, apellido, telefono }) {
   const existente = get('SELECT id FROM alumnos WHERE dni = ?', [dni]);
   if (existente) throw new Error('Ya existe un alumno registrado con ese DNI.');
   const id = run(
-    'INSERT INTO alumnos (dni, nombre, apellido, telefono) VALUES (?, ?, ?, ?)',
-    [dni, nombre, apellido, telefono || null]
+    'INSERT INTO alumnos (dni, nombre, apellido, telefono, fecha_registro) VALUES (?, ?, ?, ?, ?)',
+    [dni, nombre, apellido, telefono || null, fechaHoraLocal()]
   );
   return get('SELECT * FROM alumnos WHERE id = ?', [id]);
 }
@@ -504,13 +551,26 @@ function registrarAsistencia(dni, actividad_id, horario) {
     throw new Error(`${alumno.nombre} ${alumno.apellido} no tiene clases disponibles en su membresía actual.`);
   }
 
-  run('INSERT INTO asistencias (alumno_id, membresia_id, actividad_id, horario) VALUES (?, ?, ?, ?)', [
-    alumno.id,
-    membresia.id,
-    actividad_id || null,
-    horario || null,
-  ]);
-  run('UPDATE membresias SET clases_usadas = clases_usadas + 1 WHERE id = ?', [membresia.id]);
+  // Misma clase, mismo día: casi seguro un doble clic o un escaneo repetido, y
+  // descontaría dos clases por una sola asistencia.
+  const repetida = get(
+    'SELECT id FROM asistencias WHERE alumno_id = ? AND date(fecha) = ? AND actividad_id IS ? AND horario IS ?',
+    [alumno.id, today(), actividad_id || null, horario || null]
+  );
+  if (repetida) {
+    throw new Error(`${alumno.nombre} ${alumno.apellido} ya tiene registrada la asistencia a esa clase hoy.`);
+  }
+
+  transaction(() => {
+    run('INSERT INTO asistencias (alumno_id, membresia_id, actividad_id, horario, fecha) VALUES (?, ?, ?, ?, ?)', [
+      alumno.id,
+      membresia.id,
+      actividad_id || null,
+      horario || null,
+      fechaHoraLocal(),
+    ]);
+    run('UPDATE membresias SET clases_usadas = clases_usadas + 1 WHERE id = ?', [membresia.id]);
+  });
 
   const membresiaActualizada = get('SELECT * FROM membresias WHERE id = ?', [membresia.id]);
   return {
@@ -572,13 +632,16 @@ function registrarRecuperacion({ alumno_id, membresia_id, cantidad_clases, motiv
   const membresia = get('SELECT * FROM membresias WHERE id = ?', [membresia_id]);
   if (!membresia) throw new Error('Membresía no encontrada.');
 
-  run('INSERT INTO recuperaciones (alumno_id, membresia_id, cantidad_clases, motivo) VALUES (?, ?, ?, ?)', [
-    alumno_id,
-    membresia_id,
-    cantidad,
-    motivo,
-  ]);
-  run('UPDATE membresias SET clases_recuperadas = clases_recuperadas + ? WHERE id = ?', [cantidad, membresia_id]);
+  transaction(() => {
+    run('INSERT INTO recuperaciones (alumno_id, membresia_id, cantidad_clases, motivo, fecha_registro) VALUES (?, ?, ?, ?, ?)', [
+      alumno_id,
+      membresia_id,
+      cantidad,
+      motivo,
+      fechaHoraLocal(),
+    ]);
+    run('UPDATE membresias SET clases_recuperadas = clases_recuperadas + ? WHERE id = ?', [cantidad, membresia_id]);
+  });
 
   return get('SELECT * FROM membresias WHERE id = ?', [membresia_id]);
 }
@@ -635,7 +698,7 @@ function diasConAsistenciasEnMes(anio, mes) {
 // ---------- Reportes de ingresos ----------
 
 function rangoPeriodo(tipo, referencia) {
-  const ref = referencia ? new Date(referencia) : new Date();
+  const ref = referencia ? parseFechaLocal(referencia) : new Date();
   let inicio, fin;
 
   if (tipo === 'semanal') {
@@ -653,8 +716,7 @@ function rangoPeriodo(tipo, referencia) {
     inicio = new Date(ref.getFullYear(), ref.getMonth(), 1);
     fin = new Date(ref.getFullYear(), ref.getMonth() + 1, 0);
   }
-  const fmt = (d) => d.toISOString().slice(0, 10);
-  return { desde: fmt(inicio), hasta: fmt(fin) };
+  return { desde: fechaLocal(inicio), hasta: fechaLocal(fin) };
 }
 
 const DIAS_SEMANA = ['Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado', 'Domingo'];
@@ -680,11 +742,11 @@ function reporteIngresos(tipo = 'mensual', referencia) {
 
   let desglose = [];
   if (tipo === 'semanal') {
-    const inicio = new Date(desde);
+    const inicio = parseFechaLocal(desde);
     desglose = DIAS_SEMANA.map((label, i) => {
       const dia = new Date(inicio);
       dia.setDate(inicio.getDate() + i);
-      const diaStr = dia.toISOString().slice(0, 10);
+      const diaStr = fechaLocal(dia);
       const monto = pagos.filter((p) => p.fecha === diaStr).reduce((a, p) => a + p.importe, 0);
       return { etiqueta: `${label} ${diaStr.slice(8, 10)}/${diaStr.slice(5, 7)}`, monto };
     });
@@ -716,7 +778,7 @@ function vencimientos() {
   // Membresías vencidas o próximas a vencer en los próximos 7 días.
   const en7dias = new Date();
   en7dias.setDate(en7dias.getDate() + 7);
-  const limite = en7dias.toISOString().slice(0, 10);
+  const limite = fechaLocal(en7dias);
 
   const rows = all(
     `SELECT m.*, a.dni, a.nombre, a.apellido, p.nombre AS plan_nombre
@@ -761,6 +823,7 @@ module.exports = {
   membresiaVigente,
   clasesDisponibles,
   addCalendarMonth,
+  fechaLocal,
   asistenciasPorFecha,
   diasConAsistenciasEnMes,
   reporteIngresos,

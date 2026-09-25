@@ -62,7 +62,7 @@ function registerHandlers() {
 
   ipcMain.handle('respaldo:crear', wrap(async () => {
     const win = BrowserWindow.getFocusedWindow();
-    const fecha = new Date().toISOString().slice(0, 10);
+    const fecha = db.fechaLocal();
     const result = await dialog.showSaveDialog(win, {
       title: 'Guardar copia de seguridad',
       defaultPath: `gym-backup-${fecha}.sqlite`,
@@ -103,7 +103,21 @@ async function createWindow() {
   }
 }
 
-app.whenReady().then(createWindow);
+// Una sola instancia: cada ventana carga su propia copia de la base en memoria y
+// guarda el archivo completo, así que con dos abiertas la última en guardar
+// pisaría los datos de la otra.
+if (!app.requestSingleInstanceLock()) {
+  app.quit();
+} else {
+  app.on('second-instance', () => {
+    const win = BrowserWindow.getAllWindows()[0];
+    if (win) {
+      if (win.isMinimized()) win.restore();
+      win.focus();
+    }
+  });
+  app.whenReady().then(createWindow);
+}
 
 app.on('window-all-closed', () => {
   if (process.platform !== 'darwin') app.quit();

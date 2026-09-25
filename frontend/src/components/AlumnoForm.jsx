@@ -2,7 +2,8 @@ import React, { useState } from 'react';
 import Alert from './Alert.jsx';
 
 const SOLO_DIGITOS = /[^0-9]/g;
-const SOLO_LETRAS = /[^A-Za-zÀ-ÿ\s'-]/g;
+// À-ÿ menos × y ÷ (que están en ese rango pero no son letras)
+const SOLO_LETRAS = /[^A-Za-zÀ-ÖØ-öø-ÿ\s'-]/g;
 
 export default function AlumnoForm({ initial, dniInicial, onGuardado, onCancelar }) {
   const [form, setForm] = useState({
